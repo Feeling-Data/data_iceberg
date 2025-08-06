@@ -1,6 +1,4 @@
-let isAnimating = false;
 let noDateData = [];
-
 let withLocation = [], withoutLocation = [];
 let xScale, g, startDate, endDate;
 let axisY = 4, rectHeight = 2, verticalPadding = 1;
@@ -64,6 +62,7 @@ function updateSnowNoise() {
 }
 
 
+
 setInterval(updateSnowNoise, 100); // dynamic noise
 
 
@@ -92,9 +91,8 @@ fetch("data.json")
       }
     });
 
-
-    withLocation = withDate.filter(d => d.Extracted_Locations);
-    withoutLocation = withDate.filter(d => !d.Extracted_Locations);
+    withLocation = withDate.filter(d => d.is_alive === true);
+    withoutLocation = withDate.filter(d => d.is_alive !== true);
     noDateData = withoutDate;
 
     if (withDate.length === 0 && withoutDate.length === 0) {
@@ -137,6 +135,7 @@ fetch("data.json")
     xScale = d3.scaleTime().domain([startDate, endDate]).range([0, width]);
     const xAxis = d3.axisBottom(xScale).ticks(d3.timeMonth.every(1)).tickFormat(d3.timeFormat("%b %Y"));
 
+
     // Group data by month for counting
     const withLocationByMonth = d3.rollup(withLocation, v => v.length, d => +d.monthObj);
     const withoutLocationByMonth = d3.rollup(withoutLocation, v => v.length, d => +d.monthObj);
@@ -162,6 +161,22 @@ fetch("data.json")
       .call(xAxis);
 
   });
+
+// Store all the current Animations
+let activeAnimations = [];
+let labelTimers = [];
+
+function clearActiveAnimations() {
+  // stop all the Animations
+  activeAnimations.forEach(anim => {
+    anim.selection().interrupt();
+  });
+  activeAnimations = [];
+
+  labelTimers.forEach(timer => clearTimeout(timer));
+  labelTimers = [];
+}
+
 
 
 function drawClusterRects(dataArray, yFunc, fillStyle) {
@@ -225,9 +240,9 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
         .attr("class", "type-bound");
 
       const length = 2 * ((maxX - minX) + (maxY - minY));
-      const DRAW_DURATION = 3000;
+      const DRAW_DURATION = 1000;
 
-      box
+      const anim = box
         .attr("stroke-dasharray", length)
         .attr("stroke-dashoffset", length)
         .transition()
@@ -235,71 +250,78 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
         .ease(d3.easeLinear)
         .attr("stroke-dashoffset", 0);
 
-      //collect label, do not draw directly
+      activeAnimations.push(anim);
+
+      //collect label info
       typeBoxInfoList.push({
         type,
         anchorX: maxX,
         anchorY: minY,
+        animEndTime: Date.now()
       });
     }
   });
 
   // stage 2：draw label，in order and avoid overlap 
-  const MIN_LABEL_SPACING = 6;
+  const MIN_LABEL_SPACING = 8;
   const occupiedLabelYs = [];
 
   typeBoxInfoList
     .sort((a, b) => a.anchorY - b.anchorY) // order label in rect Y 
-    .forEach(({ type, anchorX, anchorY }) => {
-      let labelY = anchorY - 6;
+    .forEach(({ type, anchorX, anchorY, animEndTime }, index) => {
+      const timer = setTimeout(() => {
+        let labelY = anchorY - 6;
 
-      if (occupiedLabelYs.length > 0) {
-        const lastY = occupiedLabelYs[occupiedLabelYs.length - 1];
-        if (labelY - lastY < MIN_LABEL_SPACING) {
-          labelY = lastY + MIN_LABEL_SPACING;
+        if (occupiedLabelYs.length > 0) {
+          const lastY = occupiedLabelYs[occupiedLabelYs.length - 1];
+          if (labelY - lastY < MIN_LABEL_SPACING) {
+            labelY = lastY + MIN_LABEL_SPACING;
+          }
         }
-      }
-      occupiedLabelYs.push(labelY);
+        occupiedLabelYs.push(labelY);
 
-      const targetX = anchorX + 30;
+        const targetX = anchorX + 30;
 
-      // draw leader line
-      g.append("line")
-        .attr("x1", anchorX)
-        .attr("y1", anchorY)
-        .attr("x2", anchorX)
-        .attr("y2", anchorY)
-        .attr("stroke", "white")
-        .attr("stroke-width", 0.4)
-        .style("opacity", 0)
-        .transition()
-        .delay(3000)
-        .duration(600)
-        .style("opacity", 0.6)
-        .attr("x2", targetX)
-        .attr("y2", labelY);
+        // draw leader line
+        g.append("line")
+          .attr("x1", anchorX)
+          .attr("y1", anchorY)
+          .attr("x2", anchorX)
+          .attr("y2", anchorY)
+          .attr("stroke", "white")
+          .attr("stroke-width", 0.4)
+          .style("opacity", 0)
+          .transition()
+          .delay(1000)
+          .duration(600)
+          .style("opacity", 0.6)
+          .attr("x2", targetX)
+          .attr("y2", labelY);
 
-      // add label
-      g.append("text")
-        .attr("x", targetX + 2)
-        .attr("y", labelY + 3)
-        .attr("fill", "white")
-        .attr("font-size", "7px")
-        .attr("text-anchor", "start")
-        .style("opacity", 0)
-        .text(type)
-        .transition()
-        .delay(3600)
-        .duration(800)
-        .style("opacity", 0.8);
+        // add label
+        g.append("text")
+          .attr("x", targetX + 2)
+          .attr("y", labelY + 3)
+          .attr("fill", "white")
+          .attr("font-size", "7px")
+          .attr("text-anchor", "start")
+          .style("opacity", 0)
+          .text(type)
+          .transition()
+          .delay(1500)
+          .duration(800)
+          .style("opacity", 0.8);
+      }, Math.max(0, animEndTime - Date.now()) + index * 100);
+      labelTimers.push(timer);
     });
 }
 
 
 
-
 function updateVisibleData(noseX) {
   if (!xScale || !g || !startDate || !endDate) return;
+
+  clearActiveAnimations();
 
   // Clear previous elements (including no-date group)
   g.selectAll("*").remove();
@@ -368,58 +390,5 @@ function updateVisibleData(noseX) {
     visibleWithout,
     d => axisY + 30 + getOffset(d.monthObj, belowOffsetMap) * (rectHeight + verticalPadding),
     "url(#snownoise-pattern)"
-
-
   );
-
-
-
-  // ===== Draw no-date data =====
-  const noDateAreaY = axisY + 100;
-  const noDateAreaHeight = 60;
-  const MAX_NO_DATE_ITEMS = 50;
-  const FLOAT_RANGE = 10;
-
-  if (noDateData && noDateData.length > 0) {
-    const noDateGroup = g.append("g").attr("class", "no-date-group");
-
-    // 1. select the data
-    const sampledData = noDateData.length > MAX_NO_DATE_ITEMS ?
-      noDateData.filter((d, i) => i % Math.ceil(noDateData.length / MAX_NO_DATE_ITEMS) === 0) :
-      [...noDateData];
-
-    // 2. the space
-    const itemSpacing = (xScale(endDate) - xScale(startDate)) / (sampledData.length + 1);
-
-    // 3. add float
-    sampledData.forEach((d, i) => {
-      const x = xScale(startDate) + itemSpacing * (i + 1) - 7.5;
-      const row = i % 6;
-      const baseY = noDateAreaY + (row - 2.5) * 8;
-
-
-      const rect = noDateGroup.append("rect")
-        .attr("class", "no-date-rect")
-        .attr("x", x)
-        .attr("y", baseY)
-        .attr("width", 15)
-        .attr("height", rectHeight)
-        .attr("fill", "url(#snownoise-pattern)");
-
-
-      rect.node().style.setProperty('--float-range', `${FLOAT_RANGE}px`);
-      rect.node().style.setProperty('--index', i % 10);
-    });
-
-    // 4. data selection note
-    noDateGroup.append("text")
-      .attr("x", xScale(startDate))
-      .attr("y", noDateAreaY - 25)
-      .attr("font-size", "9px")
-      .attr("fill", "#aaa")
-      .text(noDateData.length > MAX_NO_DATE_ITEMS ?
-        `No Date (Showing ${MAX_NO_DATE_ITEMS} of ${noDateData.length})` :
-        `No Date (${noDateData.length})`);
-  }
-
 }
