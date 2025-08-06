@@ -6,6 +6,11 @@ const SMOOTHING_WINDOW = 10;
 const videoWidth = 200;
 const videoHeight = 150;
 
+// store the last position nose 
+let lastProcessedNoseX = null;
+
+const NOSE_MOVE_THRESHOLD = 5;
+
 function setup() {
   createCanvas(videoWidth, videoHeight).position(window.innerWidth - videoWidth - 10, 600);
 
@@ -25,8 +30,24 @@ function setup() {
           if (noseXHistory.length > SMOOTHING_WINDOW) noseXHistory.shift();
           if (noseYHistory.length > SMOOTHING_WINDOW) noseYHistory.shift();
 
-          noseX = noseXHistory.reduce((a, b) => a + b, 0) / noseXHistory.length;
-          noseY = noseYHistory.reduce((a, b) => a + b, 0) / noseYHistory.length;
+          const newNoseX = noseXHistory.reduce((a, b) => a + b, 0) / noseXHistory.length;
+          const newNoseY = noseYHistory.reduce((a, b) => a + b, 0) / noseYHistory.length;
+
+
+          if (lastProcessedNoseX === null ||
+            Math.abs(newNoseX - lastProcessedNoseX) > NOSE_MOVE_THRESHOLD) {
+            noseX = newNoseX;
+            noseY = newNoseY;
+            lastProcessedNoseX = newNoseX;
+
+
+            updateVisibleData(noseX);
+          }
+        } else {
+
+          noseX = null;
+          noseY = null;
+          if (g) g.selectAll("*").remove();
         }
       }
     });
@@ -37,20 +58,10 @@ function draw() {
   background(255);
   image(video, 0, 0, videoWidth, videoHeight);
 
+
   if (noseX !== null && noseY !== null) {
     fill(255, 0, 0);
     noStroke();
     ellipse(noseX, noseY, 5, 5);
-    if (!isAnimating) {
-      isAnimating = true;
-      updateVisibleData(noseX);
-
-
-      setTimeout(() => {
-        isAnimating = false;
-      }, 5000 + 4000);
-    }
-  } else {
-    if (g) g.selectAll("rect").remove();
   }
 }
