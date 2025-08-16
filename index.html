@@ -3,7 +3,6 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>Timeline with Nose Control + Snow Noise</title>
 
   <!-- D3 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
@@ -27,11 +26,17 @@
     .axis text {
       font-size: 10px;
       fill: white;
+      transition: fill 0.3s;
     }
 
-    .x-axis path,
-    .x-axis line {
-      stroke: white;
+    .x-axis text.highlight {
+      font-weight: bold;
+      text-shadow: 0 0 5px rgba(255, 235, 59, 0.7);
+    }
+
+    .x-axis line,
+    .x-axis path {
+      stroke: #444;
     }
 
     .type-bound {
@@ -111,6 +116,9 @@
 
   <script src="js/timeline.js"></script>
   <script src="js/poseDetection.js"></script>
+
+  <button onclick="goFullScreen()">fullpage</button>
+
 </body>
 
 </html>
