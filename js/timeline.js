@@ -1,8 +1,8 @@
 let noDateData = [];
 let withLocation = [], withoutLocation = [];
 let xScale, g, startDate, endDate;
-let axisY = 4, rectHeight = 2, verticalPadding = 1;
-let aboveOffsetPadding = 10, belowOffsetPadding = 20;
+let axisY = 4, rectHeight = 0.6, verticalPadding = 0.2;
+let aboveOffsetPadding = 3, belowOffsetPadding = 8;
 
 const snowCanvas = document.createElement("canvas");
 const snowCtx = snowCanvas.getContext("2d");
@@ -108,7 +108,7 @@ fetch("data.json")
     endDate = d3.timeMonth.offset(maxDate, 1);
 
     const totalMonths = d3.timeMonth.count(startDate, endDate);
-    const pixelsPerMonth = 50; // Increased from daily to monthly scale
+    const pixelsPerMonth = 25; // Increased from daily to monthly scale
     const svgWidth = totalMonths * pixelsPerMonth;
 
     const svg = d3.select("#timeline").attr("width", svgWidth);
@@ -130,7 +130,10 @@ fetch("data.json")
 
     const margin = { top: 40, right: 20, bottom: 40, left: 50 };
     const width = svgWidth - margin.left - margin.right;
-    g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+    // g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+    const scaleFactor = 0.7;
+    g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top}) scale(${scaleFactor})`);
 
     xScale = d3.scaleTime().domain([startDate, endDate]).range([0, width]);
     const xAxis = d3.axisBottom(xScale).ticks(d3.timeMonth.every(1)).tickFormat(d3.timeFormat("%b %Y"));
@@ -158,7 +161,8 @@ fetch("data.json")
     g.append("g")
       .attr("class", "x-axis")
       .attr("transform", `translate(0,${axisY})`)
-      .call(xAxis);
+      .call(xAxis)
+      .style("font-size", "10px");
 
   });
 
@@ -177,6 +181,16 @@ function clearActiveAnimations() {
   labelTimers = [];
 }
 
+function goFullScreen() {
+  const elem = document.documentElement;
+  if (elem.requestFullscreen) {
+    elem.requestFullscreen();
+  } else if (elem.webkitRequestFullscreen) {
+    elem.webkitRequestFullscreen();
+  } else if (elem.msRequestFullscreen) {
+    elem.msRequestFullscreen();
+  }
+}
 
 
 function drawClusterRects(dataArray, yFunc, fillStyle) {
@@ -201,6 +215,7 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
       const x = xScale(monthDate);
 
       items.forEach((d, i) => {
+
         const y = yFunc(d);
 
         // Draw rect
@@ -234,8 +249,8 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
         .attr("y", minY)
         .attr("width", maxX - minX)
         .attr("height", maxY - minY)
-        .attr("stroke", "white")
-        .attr("stroke-width", 0.5)
+        .attr("stroke", "#FFFC00")
+        .attr("stroke-width", 0.6)
         .attr("fill", "none")
         .attr("class", "type-bound");
 
@@ -262,12 +277,12 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
     }
   });
 
-  // stage 2：draw label，in order and avoid overlap 
-  const MIN_LABEL_SPACING = 8;
+  // draw label，in order and avoid overlap 
+  const MIN_LABEL_SPACING = 10;
   const occupiedLabelYs = [];
 
   typeBoxInfoList
-    .sort((a, b) => a.anchorY - b.anchorY) // order label in rect Y 
+    .sort((a, b) => a.anchorY - b.anchorY)
     .forEach(({ type, anchorX, anchorY, animEndTime }, index) => {
       const timer = setTimeout(() => {
         let labelY = anchorY - 6;
@@ -303,7 +318,7 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
           .attr("x", targetX + 2)
           .attr("y", labelY + 3)
           .attr("fill", "white")
-          .attr("font-size", "7px")
+          .attr("font-size", "10px")
           .attr("text-anchor", "start")
           .style("opacity", 0)
           .text(type)
@@ -316,28 +331,17 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
     });
 }
 
-
-
 function updateVisibleData(noseX) {
   if (!xScale || !g || !startDate || !endDate) return;
 
   clearActiveAnimations();
-
-  // Clear previous elements (including no-date group)
   g.selectAll("*").remove();
 
-  // Re-add axis after clearing
-  const xAxis = d3.axisBottom(xScale).ticks(d3.timeMonth.every(1)).tickFormat(d3.timeFormat("%b %Y"));
-  g.append("g")
-    .attr("class", "x-axis")
-    .attr("transform", `translate(0,${axisY})`)
-    .call(xAxis);
 
-  // Calculate visible range based on nose position (if available)
   let from = startDate, to = endDate;
   if (noseX !== null && noseX !== undefined) {
     const percent = 1 - Math.min(Math.max(noseX / videoWidth, 0), 1);
-    const windowMonths = 1; // Show 1 month at a time
+    const windowMonths = 1;
     const fullRange = endDate - startDate;
     const centerTimeRaw = new Date(+startDate + percent * fullRange);
 
@@ -354,41 +358,60 @@ function updateVisibleData(noseX) {
     }
   }
 
-  // Filter and sort data with dates
+  const xAxis = d3.axisBottom(xScale)
+    .ticks(d3.timeMonth.every(1))
+    .tickFormat(d3.timeFormat("%b %Y"));
+
+  const xAxisG = g.append("g")
+    .attr("class", "x-axis")
+    .attr("transform", `translate(0,${axisY})`)
+    .call(xAxis);
+
+
+  xAxisG.selectAll(".tick text")
+    .style("font-size", "11px")
+    .attr("transform", "rotate(-45)")
+    .style("text-anchor", "end")
+    .style("fill", "#999")
+    .filter(function (d) {
+      return d >= from && d <= to;
+    })
+    .style("fill", "#FFFC00")
+    .style("font-weight", "bold")
+    .style("font-size", "12px");
+
+
   const visibleWith = withLocation
     .filter(d => d.monthObj >= from && d.monthObj <= to)
-    .sort((a, b) => {
-      if (a.monthObj - b.monthObj !== 0) return a.monthObj - b.monthObj;
-      return (a.type1_cluster || "").localeCompare(b.type1_cluster || "");
-    });
+    .sort((a, b) => a.monthObj - b.monthObj || (a.type1_cluster || "").localeCompare(b.type1_cluster || ""));
 
   const visibleWithout = withoutLocation
     .filter(d => d.monthObj >= from && d.monthObj <= to)
-    .sort((a, b) => {
-      if (a.monthObj - b.monthObj !== 0) return a.monthObj - b.monthObj;
-      return (a.type1_cluster || "").localeCompare(b.type1_cluster || "");
-    });
+    .sort((a, b) => a.monthObj - b.monthObj || (a.type1_cluster || "").localeCompare(b.type1_cluster || ""));
 
-  // Offset tracking for positioned data
+
+  const ABOVE_PADDING = 30;
+  const BELOW_PADDING = 30;
   const aboveOffsetMap = {};
   const belowOffsetMap = {};
 
   function getOffset(monthObj, map) {
     const key = +monthObj;
-    if (!map[key]) map[key] = 0;
-    return map[key]++;
+    map[key] = (map[key] || 0) + 1;
+    return map[key] - 1;
   }
 
-  // Draw grouped rects for data with dates
+
   drawClusterRects(
     visibleWith,
-    d => axisY - 30 - (getOffset(d.monthObj, aboveOffsetMap) + 1) * (rectHeight + verticalPadding),
+    d => axisY - 35 - ABOVE_PADDING - (getOffset(d.monthObj, aboveOffsetMap) + 1) * (rectHeight + verticalPadding),
     "white"
   );
 
   drawClusterRects(
     visibleWithout,
-    d => axisY + 30 + getOffset(d.monthObj, belowOffsetMap) * (rectHeight + verticalPadding),
+    d => axisY + 30 + BELOW_PADDING + getOffset(d.monthObj, belowOffsetMap) * (rectHeight + verticalPadding),
     "url(#snownoise-pattern)"
   );
 }
+
