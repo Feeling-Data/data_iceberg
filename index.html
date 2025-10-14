@@ -1,69 +1,104 @@
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
-  <meta charset="UTF-8" />
+  <head>
+    <meta charset="UTF-8" />
 
-  <!-- D3 -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-  <!-- p5.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.2/p5.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.2/addons/p5.dom.min.js"></script>
-  <!-- ml5.js (PoseNet) -->
-  <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+    <!-- D3 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <!-- p5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.2/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.2/addons/p5.dom.min.js"></script>
+    <!-- ml5.js (PoseNet) -->
+    <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
 
-  <style>
-    body {
-      background-color: black;
-      color: white;
-      font-family: Arial, sans-serif;
-    }
+    <!-- Neue Haas Grotesk Display Pro Font -->
+    <link href="https://fonts.cdnfonts.com/css/neue-haas-grotesk-display-pro" rel="stylesheet">
 
-    .event {
-      stroke-width: 0.5px;
-    }
-
-    .axis text {
-      font-size: 10px;
-      fill: white;
-      transition: fill 0.3s;
-    }
-
-    .x-axis text.highlight {
-      font-weight: bold;
-      text-shadow: 0 0 5px rgba(255, 235, 59, 0.7);
-    }
-
-    .x-axis line,
-    .x-axis path {
-      stroke: #444;
-    }
-
-    .type-bound {
-      pointer-events: none;
-      opacity: 0.7;
-    }
-
-
-    @keyframes float-vertical {
-
-      0%,
-      100% {
-        transform: translateY(0);
+    <style>
+      body {
+        background-color: black;
+        color: white;
+        font-family: 'Neue Haas Grotesk Display Pro', sans-serif;
       }
 
-      50% {
-        transform: translateY(var(--float-range));
+      .event {
+        stroke-width: 0.5px;
       }
-    }
 
-    .no-date-rect {
-      animation: float-vertical 3s ease-in-out infinite;
-      animation-delay: calc(var(--index) * 0.1s);
-      transform-origin: center;
-    }
+      .axis text {
+        font-size: 10px;
+        fill: white;
+        transition: fill 0.3s;
+      }
 
-    /* .x-axis path,
+      .x-axis text {
+        fill: #FFF;
+        text-anchor: end;
+        font-family: "Neue Haas Grotesk Display Pro";
+        font-size: 20px;
+        font-style: normal;
+        font-weight: 500;
+        line-height: normal;
+      }
+
+      .x-axis text.highlight {
+        font-weight: 700;
+      }
+
+      .x-axis line,
+      .x-axis path {
+        display: none;
+      }
+
+      .type-bound {
+        pointer-events: none;
+        opacity: 0.7;
+      }
+
+      #generative-container {
+        /* background: linear-gradient(to bottom, #0a1a2e, #16213e, #0f3460);
+        border-top: 1px solid rgba(100, 150, 200, 0.3); */
+        overflow: visible;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      #generative-container canvas {
+        display: block !important;
+        width: 100% !important;
+        height: 100% !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: 1 !important;
+      }
+
+
+      @keyframes float-vertical {
+
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+
+        50% {
+          transform: translateY(var(--float-range));
+        }
+      }
+
+      .no-date-rect {
+        animation: float-vertical 3s ease-in-out infinite;
+        animation-delay: calc(var(--index) * 0.1s);
+        transform-origin: center;
+      }
+
+      /* .x-axis path,
     .x-axis line {
       animation: random-flicker 2s infinite;
     }
@@ -73,52 +108,61 @@
       animation-delay: 0.3s;
     } */
 
-    @keyframes random-flicker {
+      @keyframes random-flicker {
 
-      0%,
-      5%,
-      7%,
-      19%,
-      21%,
-      63%,
-      65%,
-      69%,
-      71%,
-      100% {
-        opacity: 0.6;
-        stroke-opacity: 0.6;
+        0%,
+        5%,
+        7%,
+        19%,
+        21%,
+        63%,
+        65%,
+        69%,
+        71%,
+        100% {
+          opacity: 0.6;
+          stroke-opacity: 0.6;
+        }
+
+        6%,
+        20%,
+        64%,
+        70% {
+          opacity: 0.2;
+          stroke-opacity: 0.2;
+        }
+
+        8%,
+        22%,
+        67%,
+        72% {
+          opacity: 0.8;
+          stroke-opacity: 0.8;
+        }
       }
+    </style>
+  </head>
 
-      6%,
-      20%,
-      64%,
-      70% {
-        opacity: 0.2;
-        stroke-opacity: 0.2;
-      }
+  <body>
+    <!-- Generative Ocean Background -->
+    <div id="generative-container">
+      <!-- <canvas id="ocean-generative"></canvas> -->
+    </div>
 
-      8%,
-      22%,
-      67%,
-      72% {
-        opacity: 0.8;
-        stroke-opacity: 0.8;
-      }
-    }
-  </style>
-</head>
+    <!-- Content above the background -->
+    <div style="position: relative; z-index: 10;">
+      <h2>data_ iceberg (Nose-Controlled Time Range)</h2>
+      <div id="scroll-container" style="width: 100%; overflow-x: auto;">
+        <svg id="timeline" height="400"></svg>
+      </div>
+    </div>
 
-<body>
-  <h2>data_ iceberg (Nose-Controlled Time Range)</h2>
-  <div id="scroll-container" style="width: 100%; overflow-x: auto;">
-    <svg id="timeline" height="400"></svg>
-  </div>
+    <script src="js/timeline.js"></script>
+    <script src="js/poseDetection.js"></script>
+    <script src="js/oceanGenerative.js"></script>
 
-  <script src="js/timeline.js"></script>
-  <script src="js/poseDetection.js"></script>
+    <button onclick="goFullScreen()">fullpage</button>
 
-  <button onclick="goFullScreen()">fullpage</button>
-
-</body>
+  </body>
 
 </html>

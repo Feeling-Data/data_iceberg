@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ocean Generative - Static Pixelated Gradients</title>
+
+    <!-- p5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.2/p5.min.js"></script>
+
+    <!-- Neue Haas Grotesk Display Pro Font -->
+    <link href="https://fonts.cdnfonts.com/css/neue-haas-grotesk-display-pro" rel="stylesheet">
+
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #000;
+        color: #fff;
+        font-family: 'Neue Haas Grotesk Display Pro', sans-serif;
+        overflow: hidden;
+      }
+
+      #controls {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 15px;
+        border-radius: 8px;
+        backdrop-filter: blur(10px);
+      }
+
+      #controls h3 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      #controls p {
+        margin: 5px 0;
+        font-size: 12px;
+        opacity: 0.8;
+      }
+
+      #fullscreen-btn {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 10px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-family: 'Neue Haas Grotesk Display Pro', sans-serif;
+        font-size: 12px;
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+      }
+
+      #fullscreen-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.5);
+      }
+
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="controls">
+      <h3>Ocean Generative</h3>
+      <p>Click to create ripples</p>
+      <p>SPACE: Regenerate</p>
+      <p>S: Save image</p>
+    </div>
+
+    <button id="fullscreen-btn" onclick="goFullScreen()">Fullscreen</button>
+
+    <script src="js/oceanGenerative.js"></script>
+
+    <script>
+      function goFullScreen() {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+          elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+          elem.msRequestFullscreen();
+        }
+      }
+
+      // Handle fullscreen change
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+      function handleFullscreenChange() {
+        if (window.oceanCanvas) {
+          setTimeout(() => {
+            windowResized();
+          }, 100);
+        }
+      }
+    </script>
+  </body>
+
+</html>

@@ -277,7 +277,7 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
     }
   });
 
-  // draw label，in order and avoid overlap 
+  // draw label，in order and avoid overlap
   const MIN_LABEL_SPACING = 10;
   const occupiedLabelYs = [];
 
@@ -372,12 +372,12 @@ function updateVisibleData(noseX) {
     .style("font-size", "11px")
     .attr("transform", "rotate(-45)")
     .style("text-anchor", "end")
-    .style("fill", "#999")
+    .style("fill", "#FFF")
     .filter(function (d) {
       return d >= from && d <= to;
     })
-    .style("fill", "#FFFC00")
-    .style("font-weight", "bold")
+    .style("fill", "#FFF")
+    .style("font-weight", "700")
     .style("font-size", "12px");
 
 
