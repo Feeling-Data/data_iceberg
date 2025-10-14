@@ -323,7 +323,7 @@ function getJaggedWaveY(x) {
   const xAxisY = getXAxisPosition();
 
   // Calculate the maximum possible jaggedness to position wave correctly
-  const maxJaggedness = 15 + 8 + 12 + 10 + 5; // Sum of all jaggedness amplitudes
+  const maxJaggedness = 12 + 6 + 8; // Sum of all jaggedness amplitudes (much smoother)
   const waveAmplitude = 20; // Main wave amplitude
 
   // Position the wave higher - make it reach well above x-axis
@@ -332,19 +332,16 @@ function getJaggedWaveY(x) {
   // Add the main wave oscillation
   baseY += Math.sin(x * 0.01 + waveOffset) * 20;
 
-  // Add jaggedness with multiple frequency components
-  let jaggedness = 0;
-  jaggedness += Math.sin(x * 0.05 + waveOffset * 2) * 15; // Medium frequency
-  jaggedness += Math.sin(x * 0.1 + waveOffset * 3) * 8;   // High frequency
-  jaggedness += Math.sin(x * 0.02 + waveOffset * 1.5) * 12; // Low frequency
+  // Smooth wave with only low-frequency components
+  let smoothWave = 0;
+  smoothWave += Math.sin(x * 0.03 + waveOffset * 2) * 12; // Gentle medium frequency
+  smoothWave += Math.sin(x * 0.015 + waveOffset * 1.5) * 8; // Low frequency
+  smoothWave += Math.sin(x * 0.06 + waveOffset * 2.3) * 6; // Subtle detail
 
-  // Add random pixel-level choppiness
-  jaggedness += (Math.random() - 0.5) * 10;
+  // Very minimal random variation for subtle texture
+  smoothWave += (Math.random() - 0.5) * 0.5; // Barely noticeable
 
-  // Add time-based shifting
-  jaggedness += Math.sin(time * 3 + x * 0.03) * 5;
-
-  return baseY + jaggedness;
+  return baseY + smoothWave;
 }
 
 function drawSkyArea() {
@@ -359,132 +356,154 @@ function drawSkyArea() {
 }
 
 function drawPixelatedNoise() {
-  // Draw pixelated noise with jagged wave boundary and dynamic pixel sizes
-  // Include wave edge and area below x-axis
+  // Draw pixelated noise with smooth wave boundary
   const xAxisY = getXAxisPosition();
   const waveEndY = Math.min(oceanCanvas.height, xAxisY + 250); // Taller ocean - 250px below
+
+  // Use smaller step size for smoother wave edge
+  const step = pixelSize / 2; // Half-size steps for smoother rendering
 
   for (let x = 0; x < oceanCanvas.width; x += pixelSize) {
     let waveY = getJaggedWaveY(x);
 
-    // Draw from the jagged wave edge down to the end
-    for (let y = waveY; y < waveEndY; y += pixelSize) {
-      // Calculate ripple effect on this pixel (optimized)
-      let rippleOffset = 0;
-      if (ripples.length > 0) {
-        for (let ripple of ripples) {
-          // Skip distant ripples for performance
-          const distToRipple = Math.sqrt((x - ripple.x) ** 2 + (y - ripple.y) ** 2);
-          if (distToRipple < ripple.radius + 100) { // Only check nearby ripples
-            rippleOffset += ripple.getEffect(x, y);
-          }
-        }
+    // Extended anti-aliasing zone for smoother transition
+    const antiAliasHeight = pixelSize * 4;
+    const smoothStart = waveY - antiAliasHeight;
+
+    // Draw from above the wave edge with smooth transition
+    for (let y = smoothStart; y < waveEndY; y += step) {
+      // Calculate alpha for smooth edge transition
+      let alpha = 1.0;
+      if (y < waveY) {
+        // Smooth fade-in at the wave edge with cubic easing for even smoother transition
+        const distFromEdge = waveY - y;
+        const normalizedDist = distFromEdge / antiAliasHeight;
+        alpha = 1 - Math.pow(normalizedDist, 0.7); // Smoother curve
+        alpha = Math.max(0, Math.min(1, alpha));
       }
 
-      // Check if this pixel is affected by ripples
-      const hasRippleEffect = Math.abs(rippleOffset) > 0.5;
-
-      // Apply ripple displacement to pixel position
-      let displayX = x + Math.cos(rippleOffset * 0.1) * rippleOffset * 0.5;
-      let displayY = y + Math.sin(rippleOffset * 0.1) * rippleOffset * 0.5;
-
-      // Dynamic pixel size variation - calmer when no ripples
-      let dynamicPixelSize = pixelSize;
-
-      if (hasRippleEffect) {
-        // More dramatic size variation when ripples are present
-        let sizeVariation = Math.sin(x * 0.03 + time * 2) * 2 +
-          Math.cos(y * 0.02 + time * 1.5) * 1.5 +
-          Math.sin(time * 4 + x * 0.01) * 1;
-
-        // Add ripple effect to size variation
-        sizeVariation += Math.abs(rippleOffset) * 0.2;
-        dynamicPixelSize += sizeVariation;
-      } else {
-        // Subtle variation for calm ocean background
-        let sizeVariation1 = Math.sin(x * 0.015 + time * 0.4) * 0.3;
-        let sizeVariation2 = Math.cos(y * 0.012 + time * 0.3) * 0.2;
-        dynamicPixelSize += sizeVariation1 + sizeVariation2;
+      // Only draw if alpha is meaningful
+      if (alpha > 0.05) {
+        drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha);
       }
-
-      dynamicPixelSize = Math.max(4, Math.min(12, dynamicPixelSize)); // Keep within reasonable bounds
-
-      // No skipping - draw all pixels for solid ocean
-
-      // Subtle static for calm ocean background
-      let staticNoise = hasRippleEffect ?
-        (Math.random() * 0.4 + 0.8) : // 0.8 to 1.2 when ripples present
-        (Math.random() * 0.1 + 0.95); // 0.95 to 1.05 when calm - minimal variation
-
-      // Subtle noise layers for gentle morphing
-      let noiseVal1 = Math.sin(x * 0.02 + time * 0.5) * Math.cos(y * 0.015 + time * 0.4) * Math.sin(time * 0.8);
-      let noiseVal2 = Math.sin(x * 0.01 + time * 0.3) * Math.cos(y * 0.012 + time * 0.6) * Math.sin(time * 0.5);
-
-      let noiseVal = (noiseVal1 + noiseVal2 * 0.6) / 1.6;
-
-      // Minimal noise intensity to keep ripples prominent
-      if (!hasRippleEffect) {
-        noiseVal *= 0.2; // Very subtle noise variation
-      }
-
-      // Ocean depth affects color (only below wave)
-      let depthFactor = (y - waveY) / (oceanCanvas.height - waveY);
-
-      // Below water - deeper blues with more variation near the jagged edge
-      let edgeProximity = Math.max(0, 1 - (y - waveY) / 20); // How close to the jagged edge
-      let edgeVariation = edgeProximity * (hasRippleEffect ? 15 : 5); // Less variation when calm
-
-      // Keep colors in blue range - eliminate black pixels in calm areas
-      let randomVariation = hasRippleEffect ?
-        (Math.random() - 0.5) * (10 + edgeVariation) : // Normal variation with ripples
-        0; // No random variation in calm areas to prevent black pixels
-
-      let r = 5 + depthFactor * 15 + noiseVal * 10 + randomVariation;
-      let g = 15 + depthFactor * 25 + noiseVal * 15 + randomVariation * 1.2;
-      let b = 35 + depthFactor * 50 + noiseVal * 20 + randomVariation * 1.5;
-
-      // Ensure minimum blue values in calm areas to prevent black pixels
-      if (!hasRippleEffect) {
-        r = Math.max(5, r);   // Minimum red to prevent pure black
-        g = Math.max(15, g);  // Minimum green to prevent pure black
-        b = Math.max(35, b);  // Minimum blue to maintain ocean color
-      }
-
-      // Apply static noise
-      r *= staticNoise;
-      g *= staticNoise;
-      b *= staticNoise;
-
-      // Constrain colors to blue range - ensure no black pixels
-      if (hasRippleEffect) {
-        r = Math.max(0, Math.min(60, r));  // Keep red low
-        g = Math.max(0, Math.min(80, g));  // Keep green moderate
-        b = Math.max(20, Math.min(150, b)); // Keep blue dominant
-      } else {
-        // In calm areas, ensure higher minimum values to prevent black pixels
-        r = Math.max(8, Math.min(40, r));   // Higher minimum red
-        g = Math.max(20, Math.min(60, g));  // Higher minimum green
-        b = Math.max(45, Math.min(120, b)); // Higher minimum blue
-      }
-
-      // Add brightness variation from ripple
-      if (Math.abs(rippleOffset) > 0.5) {
-        const rippleBrightness = 1 + (Math.abs(rippleOffset) / 20) * 0.3;
-        r *= rippleBrightness;
-        g *= rippleBrightness;
-        b *= rippleBrightness;
-
-        // Re-constrain after brightness adjustment
-        r = Math.max(0, Math.min(80, r));
-        g = Math.max(0, Math.min(100, g));
-        b = Math.max(20, Math.min(180, b));
-      }
-
-      // Draw pixelated square with dynamic size at displaced position
-      ctx.fillStyle = `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
-      ctx.fillRect(displayX, displayY, dynamicPixelSize, dynamicPixelSize);
     }
   }
+}
+
+function drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha) {
+  // Calculate ripple effect on this pixel (optimized)
+  let rippleOffset = 0;
+  if (ripples.length > 0) {
+    for (let ripple of ripples) {
+      // Skip distant ripples for performance
+      const distToRipple = Math.sqrt((x - ripple.x) ** 2 + (y - ripple.y) ** 2);
+      if (distToRipple < ripple.radius + 100) { // Only check nearby ripples
+        rippleOffset += ripple.getEffect(x, y);
+      }
+    }
+  }
+
+  // Check if this pixel is affected by ripples
+  const hasRippleEffect = Math.abs(rippleOffset) > 0.5;
+
+  // Apply ripple displacement to pixel position
+  let displayX = x + Math.cos(rippleOffset * 0.1) * rippleOffset * 0.5;
+  let displayY = y + Math.sin(rippleOffset * 0.1) * rippleOffset * 0.5;
+
+  // Dynamic pixel size with subtle variation
+  let dynamicPixelSize = pixelSize;
+
+  if (hasRippleEffect) {
+    // More dramatic size variation when ripples are present
+    let sizeVariation = Math.sin(x * 0.03 + time * 2) * 2 +
+      Math.cos(y * 0.02 + time * 1.5) * 1.5 +
+      Math.sin(time * 4 + x * 0.01) * 1;
+
+    // Add ripple effect to size variation
+    sizeVariation += Math.abs(rippleOffset) * 0.2;
+    dynamicPixelSize += sizeVariation;
+  } else {
+    // Subtle variation for calm ocean
+    let sizeVariation1 = Math.sin(x * 0.015 + time * 0.4) * 0.3;
+    let sizeVariation2 = Math.cos(y * 0.012 + time * 0.3) * 0.2;
+    dynamicPixelSize += sizeVariation1 + sizeVariation2;
+  }
+
+  dynamicPixelSize = Math.max(4, Math.min(12, dynamicPixelSize));
+
+  // Subtle static for calm ocean background
+  let staticNoise = hasRippleEffect ?
+    (Math.random() * 0.4 + 0.8) : // 0.8 to 1.2 when ripples present
+    (Math.random() * 0.1 + 0.95); // 0.95 to 1.05 when calm - minimal variation
+
+  // Subtle noise layers for gentle morphing
+  let noiseVal1 = Math.sin(x * 0.02 + time * 0.5) * Math.cos(y * 0.015 + time * 0.4) * Math.sin(time * 0.8);
+  let noiseVal2 = Math.sin(x * 0.01 + time * 0.3) * Math.cos(y * 0.012 + time * 0.6) * Math.sin(time * 0.5);
+
+  let noiseVal = (noiseVal1 + noiseVal2 * 0.6) / 1.6;
+
+  // Minimal noise intensity to keep ripples prominent
+  if (!hasRippleEffect) {
+    noiseVal *= 0.2; // Very subtle noise variation
+  }
+
+  // Ocean depth affects color (only below wave)
+  let depthFactor = (y - waveY) / (oceanCanvas.height - waveY);
+
+  // Below water - deeper blues with more variation near the jagged edge
+  let edgeProximity = Math.max(0, 1 - (y - waveY) / 20); // How close to the jagged edge
+  let edgeVariation = edgeProximity * (hasRippleEffect ? 15 : 5); // Less variation when calm
+
+  // Keep colors in blue range - eliminate black pixels in calm areas
+  let randomVariation = hasRippleEffect ?
+    (Math.random() - 0.5) * (10 + edgeVariation) : // Normal variation with ripples
+    0; // No random variation in calm areas to prevent black pixels
+
+  let r = 5 + depthFactor * 15 + noiseVal * 10 + randomVariation;
+  let g = 15 + depthFactor * 25 + noiseVal * 15 + randomVariation * 1.2;
+  let b = 35 + depthFactor * 50 + noiseVal * 20 + randomVariation * 1.5;
+
+  // Ensure minimum blue values in calm areas to prevent black pixels
+  if (!hasRippleEffect) {
+    r = Math.max(5, r);   // Minimum red to prevent pure black
+    g = Math.max(15, g);  // Minimum green to prevent pure black
+    b = Math.max(35, b);  // Minimum blue to maintain ocean color
+  }
+
+  // Apply static noise
+  r *= staticNoise;
+  g *= staticNoise;
+  b *= staticNoise;
+
+  // Constrain colors to blue range - ensure no black pixels
+  if (hasRippleEffect) {
+    r = Math.max(0, Math.min(60, r));  // Keep red low
+    g = Math.max(0, Math.min(80, g));  // Keep green moderate
+    b = Math.max(20, Math.min(150, b)); // Keep blue dominant
+  } else {
+    // In calm areas, ensure higher minimum values to prevent black pixels
+    r = Math.max(8, Math.min(40, r));   // Higher minimum red
+    g = Math.max(20, Math.min(60, g));  // Higher minimum green
+    b = Math.max(45, Math.min(120, b)); // Higher minimum blue
+  }
+
+  // Add brightness variation from ripple
+  if (Math.abs(rippleOffset) > 0.5) {
+    const rippleBrightness = 1 + (Math.abs(rippleOffset) / 20) * 0.3;
+    r *= rippleBrightness;
+    g *= rippleBrightness;
+    b *= rippleBrightness;
+
+    // Re-constrain after brightness adjustment
+    r = Math.max(0, Math.min(80, r));
+    g = Math.max(0, Math.min(100, g));
+    b = Math.max(20, Math.min(180, b));
+  }
+
+  // Draw pixelated square with dynamic size at displaced position
+  // Apply alpha for smooth wave edge
+  ctx.fillStyle = `rgba(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)}, ${alpha})`;
+  ctx.fillRect(displayX, displayY, dynamicPixelSize, dynamicPixelSize);
 }
 
 
