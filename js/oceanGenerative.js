@@ -21,8 +21,8 @@ class Ripple {
     this.x = x;
     this.y = y;
     this.radius = 0;
-    this.maxRadius = 800;
-    this.speed = 3;
+    this.maxRadius = window.innerWidth * 4; // Much larger for true ocean coverage
+    this.speed = 8; // Much faster expansion
     this.strength = 1;
     this.life = 1.0; // Life starts at 1.0
     this.maxLife = 300; // Maximum frames to live (5 seconds at 60fps)
@@ -63,20 +63,26 @@ class Ripple {
   }
 
   getEffect(px, py) {
-    // Create small ring-shaped ripples that cascade outward
+    // Create massive expanding circular rings that span the whole ocean
     const dist = Math.sqrt((px - this.x) ** 2 + (py - this.y) ** 2);
-    const distFromRipple = Math.abs(dist - this.radius);
 
-    if (distFromRipple < 40 && this.totalStrength > 0) {
-      // Create multiple small ring ripples that cascade
-      const rippleStrength = (1 - distFromRipple / 40) * this.totalStrength;
+    if (this.totalStrength > 0) {
+      // Create very large rings that expand across the entire ocean
+      for (let ringIndex = 0; ringIndex < 10; ringIndex++) {
+        const ringRadius = this.radius - (ringIndex * 80); // 80px gaps between rings
+        const distFromRing = Math.abs(dist - ringRadius);
 
-      // Multiple ring frequencies for cascading effect
-      const ring1 = Math.sin(distFromRipple * 0.4) * 0.5;
-      const ring2 = Math.sin(distFromRipple * 0.8 + 1) * 0.3;
-      const ring3 = Math.sin(distFromRipple * 1.2 + 2) * 0.2;
+        if (distFromRing < 40 && ringRadius > 0 && ringRadius < this.radius + 200) {
+          // Ring strength decreases with distance from center
+          const ringStrength = this.totalStrength * (1 - ringIndex * 0.08) * (1 - dist / (this.maxRadius * 0.95));
+          const localStrength = (1 - distFromRing / 40) * ringStrength;
 
-      return (ring1 + ring2 + ring3) * rippleStrength * 20;
+          // Create ring wave pattern with multiple frequencies
+          const waveFreq = 0.15 + (ringIndex * 0.05);
+          const ringWave = Math.sin(distFromRing * waveFreq + ringIndex * 0.6) * localStrength;
+          return ringWave * 35;
+        }
+      }
     }
     return 0;
   }
