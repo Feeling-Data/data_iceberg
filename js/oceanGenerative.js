@@ -1,5 +1,5 @@
 // Ocean-inspired generative piece with static-y pixelated gradients
-let pixelSize = 8;
+let pixelSize = 12; // Larger pixels for better performance
 let time = 0;
 let waveOffset = 0;
 let oceanCanvas;
@@ -13,7 +13,7 @@ let lastTimelinePosition = null;
 
 // Performance optimization
 let lastFrameTime = 0;
-const targetFPS = 30; // Reduce from 60fps to 30fps for better performance
+const targetFPS = 20; // Reduce to 20fps for better performance
 const frameInterval = 1000 / targetFPS;
 
 class Ripple {
@@ -63,12 +63,20 @@ class Ripple {
   }
 
   getEffect(px, py) {
+    // Create small ring-shaped ripples that cascade outward
     const dist = Math.sqrt((px - this.x) ** 2 + (py - this.y) ** 2);
     const distFromRipple = Math.abs(dist - this.radius);
 
-    if (distFromRipple < 50 && this.totalStrength > 0) {
-      const rippleStrength = (1 - distFromRipple / 50) * this.totalStrength;
-      return Math.sin(distFromRipple * 0.3) * rippleStrength * 20;
+    if (distFromRipple < 40 && this.totalStrength > 0) {
+      // Create multiple small ring ripples that cascade
+      const rippleStrength = (1 - distFromRipple / 40) * this.totalStrength;
+
+      // Multiple ring frequencies for cascading effect
+      const ring1 = Math.sin(distFromRipple * 0.4) * 0.5;
+      const ring2 = Math.sin(distFromRipple * 0.8 + 1) * 0.3;
+      const ring3 = Math.sin(distFromRipple * 1.2 + 2) * 0.2;
+
+      return (ring1 + ring2 + ring3) * rippleStrength * 20;
     }
     return 0;
   }
@@ -182,22 +190,21 @@ function checkForTimelineChanges() {
       // Ensure ripple appears exactly at x-axis level, not deep in ocean
       rippleY = xAxisY;
 
-      // Create multiple ripples along the same x position spanning the wave height
-      const waveHeight = oceanCanvas.height - xAxisY; // Height from x-axis to bottom
-      const rippleCount = 8; // Number of ripples to create
+      // Fewer ripples for distinct droplet effect
+      const waveHeight = Math.min(250, oceanCanvas.height - xAxisY); // Match ocean height
+      const rippleCount = 2; // Fewer ripples for distinct droplets
+
+      // Clear old ripples to prevent buildup
+      if (ripples.length > 4) {
+        ripples = ripples.slice(-2);
+      }
 
       for (let i = 0; i < rippleCount; i++) {
-        // Distribute ripples evenly along the wave height
         const rippleSpacing = waveHeight / (rippleCount - 1);
         const currentRippleY = xAxisY + (i * rippleSpacing);
+        const cascadeDelay = i * 15; // Longer delay for distinct droplets
 
-        // No horizontal offset - keep ripples aligned
-        const horizontalOffset = 0;
-
-        // Add cascading delay - each ripple starts later than the one above
-        const cascadeDelay = i * 5; // 5 frames delay between each ripple
-
-        ripples.push(new Ripple(rippleX + horizontalOffset, currentRippleY, cascadeDelay));
+        ripples.push(new Ripple(rippleX, currentRippleY, cascadeDelay));
       }
 
       lastTimelinePosition = currentTimelinePosition;
@@ -313,8 +320,8 @@ function getJaggedWaveY(x) {
   const maxJaggedness = 15 + 8 + 12 + 10 + 5; // Sum of all jaggedness amplitudes
   const waveAmplitude = 20; // Main wave amplitude
 
-  // Position the wave higher but not too tall - optimize for performance
-  let baseY = xAxisY - maxJaggedness - waveAmplitude - 40; // Reduced height for better performance
+  // Position the wave higher - make it reach well above x-axis
+  let baseY = xAxisY - maxJaggedness - waveAmplitude - 180; // Much taller wave
 
   // Add the main wave oscillation
   baseY += Math.sin(x * 0.01 + waveOffset) * 20;
@@ -335,33 +342,27 @@ function getJaggedWaveY(x) {
 }
 
 function drawSkyArea() {
-  // Create smooth gradient sky above the jagged wave line
-  for (let x = 0; x < oceanCanvas.width; x++) {
-    let waveY = getJaggedWaveY(x);
+  // Use simple gradient for performance
+  const xAxisY = getXAxisPosition();
+  const gradient = ctx.createLinearGradient(0, 0, 0, xAxisY);
+  gradient.addColorStop(0, 'rgb(10, 20, 40)');
+  gradient.addColorStop(1, 'rgb(20, 35, 60)');
 
-    // Create gradient from dark blue at top to slightly lighter at wave line
-    for (let y = 0; y < waveY; y++) {
-      let gradientFactor = y / waveY;
-      let r = 10 + gradientFactor * 10;
-      let g = 20 + gradientFactor * 15;
-      let b = 40 + gradientFactor * 20;
-
-      ctx.fillStyle = `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
-      ctx.fillRect(x, y, 1, 1);
-    }
-  }
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, oceanCanvas.width, xAxisY);
 }
 
 function drawPixelatedNoise() {
   // Draw pixelated noise with jagged wave boundary and dynamic pixel sizes
-  // Optimize: only draw pixels in the wave area, not the entire screen
-  const waveStartY = Math.max(0, getXAxisPosition() - 150); // Only draw 150px above x-axis
-  const waveEndY = oceanCanvas.height;
+  // Include wave edge and area below x-axis
+  const xAxisY = getXAxisPosition();
+  const waveEndY = Math.min(oceanCanvas.height, xAxisY + 250); // Taller ocean - 250px below
 
   for (let x = 0; x < oceanCanvas.width; x += pixelSize) {
     let waveY = getJaggedWaveY(x);
 
-    for (let y = Math.max(waveY, waveStartY); y < waveEndY; y += pixelSize) {
+    // Draw from the jagged wave edge down to the end
+    for (let y = waveY; y < waveEndY; y += pixelSize) {
       // Calculate ripple effect on this pixel (optimized)
       let rippleOffset = 0;
       if (ripples.length > 0) {
@@ -394,28 +395,30 @@ function drawPixelatedNoise() {
         sizeVariation += Math.abs(rippleOffset) * 0.2;
         dynamicPixelSize += sizeVariation;
       } else {
-        // Calmer, more subtle variation when no ripples
-        let sizeVariation = Math.sin(x * 0.02 + time * 1) * 0.5 +
-          Math.cos(y * 0.015 + time * 0.8) * 0.3;
-        dynamicPixelSize += sizeVariation;
+        // Subtle variation for calm ocean background
+        let sizeVariation1 = Math.sin(x * 0.015 + time * 0.4) * 0.3;
+        let sizeVariation2 = Math.cos(y * 0.012 + time * 0.3) * 0.2;
+        dynamicPixelSize += sizeVariation1 + sizeVariation2;
       }
 
       dynamicPixelSize = Math.max(4, Math.min(12, dynamicPixelSize)); // Keep within reasonable bounds
 
-      // Skip pixels more randomly when ripples are present, less when calm
-      const skipChance = hasRippleEffect ? 0.15 : 0.03;
-      if (Math.random() < skipChance) continue;
+      // No skipping - draw all pixels for solid ocean
 
-      // Create static noise - less intense when no ripples
+      // Subtle static for calm ocean background
       let staticNoise = hasRippleEffect ?
         (Math.random() * 0.4 + 0.8) : // 0.8 to 1.2 when ripples present
-        (Math.random() * 0.2 + 0.9);  // 0.9 to 1.1 when calm
+        (Math.random() * 0.1 + 0.95); // 0.95 to 1.05 when calm - minimal variation
 
-      let noiseVal = Math.sin(x * 0.02) * Math.cos(y * 0.02) * Math.sin(time * 2);
+      // Subtle noise layers for gentle morphing
+      let noiseVal1 = Math.sin(x * 0.02 + time * 0.5) * Math.cos(y * 0.015 + time * 0.4) * Math.sin(time * 0.8);
+      let noiseVal2 = Math.sin(x * 0.01 + time * 0.3) * Math.cos(y * 0.012 + time * 0.6) * Math.sin(time * 0.5);
 
-      // Reduce noise intensity when no ripples
+      let noiseVal = (noiseVal1 + noiseVal2 * 0.6) / 1.6;
+
+      // Minimal noise intensity to keep ripples prominent
       if (!hasRippleEffect) {
-        noiseVal *= 0.3; // Much less noise variation
+        noiseVal *= 0.2; // Very subtle noise variation
       }
 
       // Ocean depth affects color (only below wave)
