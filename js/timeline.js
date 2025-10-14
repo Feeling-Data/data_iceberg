@@ -4,6 +4,60 @@ let xScale, g, startDate, endDate;
 let axisY = 4, rectHeight = 0.6, verticalPadding = 0.2;
 let aboveOffsetPadding = 3, belowOffsetPadding = 8;
 
+// Category color mapping
+const categoryColors = {
+  'Lifestyle': '#223D32',
+  'Arts': '#422852',
+  'Sports': '#38369A',
+  'Social': '#0055BC',
+  'Religion': '#3EC8FF',
+  'Education': '#96DFD5',
+  'Business': '#C6EBBE'
+};
+
+// Additional colors for other categories
+const additionalColors = [
+  '#662D3A', '#9F53BC', '#EB7683', '#E4B7F2', '#39A992', '#656C44',
+  '#C98945', '#EBD162', '#E48F7E', '#E764AE', '#B94B53', '#5157CE'
+];
+
+// Function to get color for a category
+function getCategoryColor(category) {
+  if (categoryColors[category]) {
+    return categoryColors[category];
+  }
+
+  // Assign a color from additionalColors based on category name
+  // Use a hash of the category name to consistently assign the same color
+  if (!category) return '#FFFFFF'; // Default white for undefined
+
+  let hash = 0;
+  for (let i = 0; i < category.length; i++) {
+    hash = category.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % additionalColors.length;
+  return additionalColors[index];
+}
+
+// Function to brighten a hex color
+function brightenColor(hex, percent) {
+  // Remove # if present
+  hex = hex.replace('#', '');
+
+  // Convert to RGB
+  let r = parseInt(hex.substring(0, 2), 16);
+  let g = parseInt(hex.substring(2, 4), 16);
+  let b = parseInt(hex.substring(4, 6), 16);
+
+  // Brighten by moving towards 255
+  r = Math.min(255, Math.floor(r + (255 - r) * (percent / 100)));
+  g = Math.min(255, Math.floor(g + (255 - g) * (percent / 100)));
+  b = Math.min(255, Math.floor(b + (255 - b) * (percent / 100)));
+
+  // Convert back to hex
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
 const snowCanvas = document.createElement("canvas");
 const snowCtx = snowCanvas.getContext("2d");
 snowCanvas.width = 200;
@@ -193,7 +247,7 @@ function goFullScreen() {
 }
 
 
-function drawClusterRects(dataArray, yFunc, fillStyle) {
+function drawClusterRects(dataArray, yFunc, useSnowPattern = false) {
   const typeGroups = new Map();
 
   // group by type and month
@@ -209,6 +263,7 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
   // draw all rect and bounding box，collect label
   groupedData.forEach((monthMap, type) => {
     const typePositions = [];
+    const typeRects = []; // Store rect references for this type
 
     monthMap.forEach((items, monthTime) => {
       const monthDate = new Date(monthTime);
@@ -218,15 +273,25 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
 
         const y = yFunc(d);
 
-        // Draw rect
-        g.append("rect")
+        // Get color based on category
+        const category = d.type1_cluster || "undefined";
+        const fillColor = useSnowPattern ? "url(#snownoise-pattern)" : getCategoryColor(category);
+
+        // Draw rect with full opacity initially
+        const rect = g.append("rect")
           .attr("x", x)
           .attr("y", y)
           .attr("width", 15)
           .attr("height", rectHeight)
-          .attr("fill", fillStyle)
-          .attr("opacity", 0.8)
-          .append("title")
+          .attr("fill", fillColor)
+          .attr("opacity", 1.0)
+          .attr("class", `type-rect type-${type.replace(/\s+/g, '-')}`);
+
+        // Store rect reference before adding title
+        typeRects.push(rect);
+
+        // Add title tooltip
+        rect.append("title")
           .text(`${d.title} (${d.date})`);
 
         typePositions.push({ x, y });
@@ -243,14 +308,24 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
       const minY = d3.min(ys) - padding;
       const maxY = d3.max(ys) + rectHeight + padding;
 
+      // Get the color for this category's bounding box
+      let boxColor = useSnowPattern ? "#FFFC00" : getCategoryColor(type);
+
+      console.log("Type:", type, "Box color:", boxColor);
+
+      // Optionally brighten the color for better visibility as an outline
+      // if (!useSnowPattern) {
+      //   boxColor = brightenColor(boxColor, 25);
+      // }
+
       // Draw animated bounding box
       const box = g.append("rect")
         .attr("x", minX)
         .attr("y", minY)
         .attr("width", maxX - minX)
         .attr("height", maxY - minY)
-        .attr("stroke", "#FFFC00")
-        .attr("stroke-width", 0.6)
+        .attr("stroke", boxColor)
+        .attr("stroke-width", 1.2)
         .attr("fill", "none")
         .attr("class", "type-bound");
 
@@ -267,65 +342,80 @@ function drawClusterRects(dataArray, yFunc, fillStyle) {
 
       activeAnimations.push(anim);
 
-      //collect label info
-      typeBoxInfoList.push({
-        type,
-        anchorX: maxX,
-        anchorY: minY,
-        animEndTime: Date.now()
+      // Fade rectangles to lower opacity as outline draws
+      typeRects.forEach(rectSelection => {
+        const rectAnim = rectSelection
+          .transition()
+          .duration(DRAW_DURATION)
+          .attr("opacity", 0.6);
+        activeAnimations.push(rectAnim);
       });
+
+      //collect label info - only for categories with enough records
+      const recordCount = typePositions.length;
+      const minRecordsForLabel = 12; // Minimum records to show label
+
+      if (recordCount >= minRecordsForLabel) {
+        typeBoxInfoList.push({
+          type,
+          anchorX: maxX, // Use maxX (end) for right alignment
+          anchorY: minY, // Use minY (top) for top alignment
+          recordCount,
+          typePositions, // Pass the actual rectangle positions
+          animEndTime: Date.now()
+        });
+      }
     }
   });
 
-  // draw label，in order and avoid overlap
-  const MIN_LABEL_SPACING = 10;
+  // draw labels with colored indicators
+  const MIN_LABEL_SPACING = 8; // Reduced spacing
   const occupiedLabelYs = [];
+  const labelHeight = 12; // Approximate text height
 
   typeBoxInfoList
     .sort((a, b) => a.anchorY - b.anchorY)
-    .forEach(({ type, anchorX, anchorY, animEndTime }, index) => {
+    .forEach(({ type, anchorX, anchorY, recordCount, typePositions, animEndTime }, index) => {
       const timer = setTimeout(() => {
-        let labelY = anchorY - 6;
+        // Find the actual top position of this category's rectangles
+        const categoryRects = typePositions.map(pos => pos.y);
+        const actualTopY = d3.min(categoryRects);
+        let labelY = actualTopY; // Position at the actual top of the category's rectangles
 
-        if (occupiedLabelYs.length > 0) {
-          const lastY = occupiedLabelYs[occupiedLabelYs.length - 1];
-          if (labelY - lastY < MIN_LABEL_SPACING) {
-            labelY = lastY + MIN_LABEL_SPACING;
-          }
-        }
-        occupiedLabelYs.push(labelY);
+        // No collision detection - labels positioned exactly at their category tops
 
-        const targetX = anchorX + 30;
+        const targetX = anchorX; // Square touches the bar edge (no gap)
 
-        // draw leader line
-        g.append("line")
-          .attr("x1", anchorX)
-          .attr("y1", anchorY)
-          .attr("x2", anchorX)
-          .attr("y2", anchorY)
-          .attr("stroke", "white")
-          .attr("stroke-width", 0.4)
+        // Get category color
+        const categoryColor = useSnowPattern ? "#FFFC00" : getCategoryColor(type);
+
+        // Draw colored square indicator - touching bar
+        g.append("rect")
+          .attr("x", targetX)
+          .attr("y", labelY)
+          .attr("width", 4)
+          .attr("height", 4)
+          .attr("fill", categoryColor)
           .style("opacity", 0)
           .transition()
           .delay(1000)
-          .duration(600)
-          .style("opacity", 0.6)
-          .attr("x2", targetX)
-          .attr("y2", labelY);
+          .duration(400)
+          .style("opacity", 1);
 
-        // add label
+        // Add label text - vertically centered on the square
         g.append("text")
-          .attr("x", targetX + 2)
-          .attr("y", labelY + 3)
+          .attr("x", targetX + 5)
+          .attr("y", labelY + 2)
           .attr("fill", "white")
-          .attr("font-size", "10px")
+          .attr("font-size", "9px")
           .attr("text-anchor", "start")
+          .attr("dominant-baseline", "central")
           .style("opacity", 0)
-          .text(type)
+          .text(`${type} (${recordCount})`)
           .transition()
-          .delay(1500)
-          .duration(800)
-          .style("opacity", 0.8);
+          .delay(1200)
+          .duration(600)
+          .style("opacity", 0.9);
       }, Math.max(0, animEndTime - Date.now()) + index * 100);
       labelTimers.push(timer);
     });
@@ -405,13 +495,13 @@ function updateVisibleData(noseX) {
   drawClusterRects(
     visibleWith,
     d => axisY - 35 - ABOVE_PADDING - (getOffset(d.monthObj, aboveOffsetMap) + 1) * (rectHeight + verticalPadding),
-    "white"
+    false  // Use category colors
   );
 
   drawClusterRects(
     visibleWithout,
     d => axisY + 30 + BELOW_PADDING + getOffset(d.monthObj, belowOffsetMap) * (rectHeight + verticalPadding),
-    "url(#snownoise-pattern)"
+    true  // Use snow pattern
   );
 }
 
