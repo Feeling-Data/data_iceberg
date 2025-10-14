@@ -137,29 +137,45 @@ function checkForTimelineChanges() {
 
       // Get the actual timeline element to calculate precise position
       const timeline = document.getElementById('timeline');
+      const scrollContainer = document.getElementById('scroll-container');
       let rippleX, rippleY;
 
       if (timeline) {
-        const timelineRect = timeline.getBoundingClientRect();
-        const timelineWidth = timelineRect.width;
+        // Get the timeline <g> element which contains the actual data
+        const timelineG = timeline.querySelector('g');
 
-        // Calculate the timeline position on screen
-        // Invert the nosePercent to match the timeline direction
-        const invertedNosePercent = 1 - nosePercent;
-        const timelinePositionOnScreen = timelineRect.left + (invertedNosePercent * timelineWidth);
+        if (timelineG) {
+          // Get the bounding rect of the <g> element (the actual data container)
+          const gRect = timelineG.getBoundingClientRect();
+          const scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
 
-        // Map this screen position to canvas coordinates
-        // The wave canvas should cover the full viewport, so we can map directly
-        rippleX = timelinePositionOnScreen;
+          // The timeline uses xScale to map dates to positions
+          // nosePercent represents position in the full timeline
+          // We need to map this to the actual screen position
 
-        // Debug: log the positions to see if they match
-        console.log("Timeline position on screen:", timelinePositionOnScreen);
-        console.log("Canvas width:", oceanCanvas.width);
-        console.log("Timeline rect:", timelineRect.left, timelineRect.width);
+          // Calculate the position within the full timeline width
+          const invertedNosePercent = 1 - nosePercent;
+          const positionInTimeline = invertedNosePercent * gRect.width;
+
+          // Add the left offset of the <g> element and account for scroll
+          rippleX = gRect.left + positionInTimeline;
+
+          // Debug: log the positions to see if they match
+          console.log("Ripple X:", rippleX);
+          console.log("nosePercent:", nosePercent, "inverted:", invertedNosePercent);
+          console.log("Position in timeline:", positionInTimeline);
+          console.log("Timeline <g> rect:", gRect.left, gRect.width);
+          console.log("Scroll left:", scrollLeft);
+        } else {
+          // Fallback to SVG center
+          const timelineRect = timeline.getBoundingClientRect();
+          rippleX = timelineRect.left + (timelineRect.width / 2);
+        }
+
         rippleY = xAxisY; // At the x-axis level
       } else {
         // Fallback to canvas-based mapping
-        rippleX = (1 - nosePercent) * oceanCanvas.width;
+        rippleX = oceanCanvas.width / 2;
         rippleY = xAxisY;
       }
 
@@ -175,8 +191,8 @@ function checkForTimelineChanges() {
         const rippleSpacing = waveHeight / (rippleCount - 1);
         const currentRippleY = xAxisY + (i * rippleSpacing);
 
-        // Add slight horizontal variation for more natural look
-        const horizontalOffset = (Math.random() - 0.5) * 20;
+        // No horizontal offset - keep ripples aligned
+        const horizontalOffset = 0;
 
         // Add cascading delay - each ripple starts later than the one above
         const cascadeDelay = i * 5; // 5 frames delay between each ripple
