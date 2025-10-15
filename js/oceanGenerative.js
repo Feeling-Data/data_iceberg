@@ -11,23 +11,72 @@ let lastNoseX = null;
 let lastNoseY = null;
 let lastTimelinePosition = null;
 
+// Pulsing ripple when settled
+let settledTimeout = null;
+let pulseInterval = null;
+let isSettled = false;
+let lastRippleX = null;
+let lastRippleY = null;
+let currentPulseInterval = 3000; // Dynamic pulse interval based on ripple size
+const SETTLE_DELAY = 400; // Wait 400ms before considering "settled"
+
 // Performance optimization
 let lastFrameTime = 0;
 const targetFPS = 20; // Reduce to 20fps for better performance
 const frameInterval = 1000 / targetFPS;
 
 class Ripple {
-  constructor(x, y, delay = 0) {
+  constructor(x, y, delay = 0, dataCount = 1) {
     this.x = x;
     this.y = y;
     this.radius = 0;
-    this.maxRadius = window.innerWidth * 4; // Much larger for true ocean coverage
-    this.speed = 8; // Much faster expansion
+
+    // Scale maxRadius based on data count relative to min/max in dataset
+    // Use the actual min and max from the data for dynamic scaling
+    const minDataCount = window.minDataCount || 1;
+    const maxDataCount = window.maxDataCount || 1000;
+
+    // Make the base radius and scale range more balanced for bottom bar data only
+    const baseMaxRadius = window.innerWidth * 0.3; // Medium base
+    const minScale = .5; // Minimum 50% of base - visible ripples for small data
+    const maxScale = 5; // Maximum 500% of base - large but not overwhelming ripples
+
+    // Normalize data count to 0-1 range based on actual min/max
+    let normalizedCount;
+    if (maxDataCount === minDataCount) {
+      normalizedCount = 0.5; // If all dates have same count, use middle scale
+    } else {
+      normalizedCount = (dataCount - minDataCount) / (maxDataCount - minDataCount);
+    }
+
+    // Apply strong exponential scaling for EXTREME differences at the low end
+    // This makes small data BARELY visible and large data HUGE
+    normalizedCount = Math.pow(normalizedCount, 2.0); // Stronger exponential curve
+
+    const radiusScale = minScale + (normalizedCount * (maxScale - minScale));
+    this.maxRadius = baseMaxRadius * radiusScale;
+
+    this.speed = 8; // Expansion speed
     this.strength = 1;
     this.life = 1.0; // Life starts at 1.0
-    this.maxLife = 300; // Maximum frames to live (5 seconds at 60fps)
-    this.fadeSpeed = 0.02; // How fast it fades per frame
+
+    // Calculate how many frames it will take to reach maxRadius
+    const framesToReachMax = this.maxRadius / this.speed;
+
+    // Scale fadeSpeed so ripple lives long enough to reach its maxRadius
+    // Add more buffer for smaller ripples so they stay longer
+    const lifeBuffer = 1.3 + (1 - normalizedCount) * 0.5; // More buffer for low data (up to 1.8x)
+    this.fadeSpeed = this.life / (framesToReachMax * lifeBuffer);
+
     this.dissipationRate = 0.001; // How much strength decreases over time
+
+    console.log(`🌊 RIPPLE CREATED:
+      dataCount: ${dataCount}
+      min/max range: [${minDataCount}, ${maxDataCount}]
+      normalized: ${normalizedCount.toFixed(3)} (0=min, 1=max)
+      maxRadius: ${this.maxRadius.toFixed(0)}px
+      framesToReachMax: ${framesToReachMax.toFixed(0)}
+      fadeSpeed: ${this.fadeSpeed.toFixed(4)} (faster = shorter life)`);
     this.delay = delay; // Delay before ripple becomes active
     this.active = false; // Whether ripple is active yet
     this.age = 0; // Age of the ripple
@@ -63,13 +112,12 @@ class Ripple {
   }
 
   getEffect(px, py) {
-    // Create massive expanding circular rings that span the whole ocean
+    // Create expanding circular rings that span the canvas
     const dist = Math.sqrt((px - this.x) ** 2 + (py - this.y) ** 2);
 
     if (this.totalStrength > 0) {
-      // Create very large rings that expand across the entire ocean
       for (let ringIndex = 0; ringIndex < 10; ringIndex++) {
-        const ringRadius = this.radius - (ringIndex * 80); // 80px gaps between rings
+        const ringRadius = this.radius - (ringIndex * 80);
         const distFromRing = Math.abs(dist - ringRadius);
 
         if (distFromRing < 40 && ringRadius > 0 && ringRadius < this.radius + 200) {
@@ -134,6 +182,142 @@ function initOceanGenerative() {
   animate();
 }
 
+function createRippleAtCurrentPosition() {
+  // Create ripple at the x-axis position
+  const xAxisY = getXAxisPosition();
+  const currentTimelinePosition = noseX;
+
+  // Map nose position to canvas coordinates to match timeline position exactly
+  const nosePercent = currentTimelinePosition / videoWidth; // 0 to 1
+
+  // Get the actual timeline element to calculate precise position
+  const timeline = document.getElementById('timeline');
+  const scrollContainer = document.getElementById('scroll-container');
+  let rippleX, rippleY;
+
+  if (timeline) {
+    // Get the timeline <g> element which contains the actual data
+    const timelineG = timeline.querySelector('g');
+
+    if (timelineG) {
+      // Get the bounding rect of the <g> element (the actual data container)
+      const gRect = timelineG.getBoundingClientRect();
+
+      // Calculate the position within the full timeline width
+      const invertedNosePercent = 1 - nosePercent;
+      const positionInTimeline = invertedNosePercent * gRect.width;
+
+      // Add the left offset of the <g> element
+      rippleX = gRect.left + positionInTimeline;
+    } else {
+      // Fallback to SVG center
+      const timelineRect = timeline.getBoundingClientRect();
+      rippleX = timelineRect.left + (timelineRect.width / 2);
+    }
+
+    rippleY = xAxisY; // At the x-axis level
+  } else {
+    // Fallback to canvas-based mapping
+    rippleX = oceanCanvas.width / 2;
+    rippleY = xAxisY;
+  }
+
+  // Position ripple at the top of the wave (fixed Y position)
+  const waveTopY = xAxisY - 150; // Fixed distance above x-axis
+
+  // Store position for pulsing
+  lastRippleX = rippleX;
+  lastRippleY = waveTopY;
+
+  // Clear old ripples to prevent buildup
+  if (ripples.length > 4) {
+    ripples = ripples.slice(-2);
+  }
+
+  // Get data count from timeline if available
+  const dataCount = typeof currentDataCount !== 'undefined' ? currentDataCount : 1;
+
+  // Create single ripple at the top of the wave with data count
+  ripples.push(new Ripple(rippleX, waveTopY, 0, dataCount));
+
+  console.log("Timeline ripple created at:", rippleX, waveTopY, "with dataCount:", dataCount);
+}
+
+function calculatePulseInterval(dataCount) {
+  // Calculate ripple lifetime based on same logic as Ripple constructor
+  const minDataCount = window.minDataCount || 1;
+  const maxDataCount = window.maxDataCount || 1000;
+
+  const baseMaxRadius = window.innerWidth * 0.3;
+  const minScale = .5;
+  const maxScale = 5;
+
+  // Normalize and apply exponential curve (same as Ripple constructor)
+  let normalizedCount;
+  if (maxDataCount === minDataCount) {
+    normalizedCount = 0.5;
+  } else {
+    normalizedCount = (dataCount - minDataCount) / (maxDataCount - minDataCount);
+  }
+  normalizedCount = Math.pow(normalizedCount, 2.0);
+
+  const radiusScale = minScale + (normalizedCount * (maxScale - minScale));
+  const maxRadius = baseMaxRadius * radiusScale;
+
+  // Calculate lifetime
+  const speed = 8;
+  const framesToReachMax = maxRadius / speed;
+  const lifeBuffer = 1.3 + (1 - normalizedCount) * 0.5;
+
+  // Total frames in ripple lifetime
+  const totalFrames = framesToReachMax * lifeBuffer;
+
+  // Convert to milliseconds at 20fps
+  const fps = 20;
+  const rippleLifetimeMs = (totalFrames / fps) * 1000;
+
+  // Add 20% buffer so new ripple starts slightly after previous one fades
+  const pulseInterval = rippleLifetimeMs * 1.2;
+
+  console.log(`Calculated pulse interval: ${pulseInterval.toFixed(0)}ms for dataCount ${dataCount} (ripple lifetime: ${rippleLifetimeMs.toFixed(0)}ms)`);
+
+  return pulseInterval;
+}
+
+function startPulsing() {
+  if (pulseInterval) return; // Already pulsing
+
+  isSettled = true;
+
+  // Calculate dynamic pulse interval based on current data count
+  const dataCount = typeof currentDataCount !== 'undefined' ? currentDataCount : 1;
+  currentPulseInterval = calculatePulseInterval(dataCount);
+
+  console.log(`User settled - starting ripple pulse every ${currentPulseInterval.toFixed(0)}ms`);
+
+  // Create ripple on dynamic interval
+  pulseInterval = setInterval(() => {
+    if (lastRippleX !== null && lastRippleY !== null) {
+      const dataCount = typeof currentDataCount !== 'undefined' ? currentDataCount : 1;
+      ripples.push(new Ripple(lastRippleX, lastRippleY, 0, dataCount));
+      console.log("Pulse ripple created");
+    }
+  }, currentPulseInterval);
+}
+
+function stopPulsing() {
+  if (pulseInterval) {
+    clearInterval(pulseInterval);
+    pulseInterval = null;
+    isSettled = false;
+    console.log("User moved - stopping ripple pulse");
+  }
+  if (settledTimeout) {
+    clearTimeout(settledTimeout);
+    settledTimeout = null;
+  }
+}
+
 function checkForTimelineChanges() {
   // Check if timeline position has changed (due to nose movement)
   if (typeof noseX !== 'undefined' && noseX !== null) {
@@ -143,70 +327,18 @@ function checkForTimelineChanges() {
     if (lastTimelinePosition === null ||
       Math.abs(currentTimelinePosition - lastTimelinePosition) > 1) {
 
-      // Create ripple at the x-axis position
-      const xAxisY = getXAxisPosition();
+      // User moved - stop pulsing and reset settle timer
+      stopPulsing();
 
-      // Map nose position to canvas coordinates to match timeline position exactly
-      const nosePercent = currentTimelinePosition / videoWidth; // 0 to 1
-
-      // Get the actual timeline element to calculate precise position
-      const timeline = document.getElementById('timeline');
-      const scrollContainer = document.getElementById('scroll-container');
-      let rippleX, rippleY;
-
-      if (timeline) {
-        // Get the timeline <g> element which contains the actual data
-        const timelineG = timeline.querySelector('g');
-
-        if (timelineG) {
-          // Get the bounding rect of the <g> element (the actual data container)
-          const gRect = timelineG.getBoundingClientRect();
-          const scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
-
-          // The timeline uses xScale to map dates to positions
-          // nosePercent represents position in the full timeline
-          // We need to map this to the actual screen position
-
-          // Calculate the position within the full timeline width
-          const invertedNosePercent = 1 - nosePercent;
-          const positionInTimeline = invertedNosePercent * gRect.width;
-
-          // Add the left offset of the <g> element and account for scroll
-          rippleX = gRect.left + positionInTimeline;
-
-          // Debug: log the positions to see if they match
-          console.log("Ripple X:", rippleX);
-          console.log("nosePercent:", nosePercent, "inverted:", invertedNosePercent);
-          console.log("Position in timeline:", positionInTimeline);
-          console.log("Timeline <g> rect:", gRect.left, gRect.width);
-          console.log("Scroll left:", scrollLeft);
-        } else {
-          // Fallback to SVG center
-          const timelineRect = timeline.getBoundingClientRect();
-          rippleX = timelineRect.left + (timelineRect.width / 2);
-        }
-
-        rippleY = xAxisY; // At the x-axis level
-      } else {
-        // Fallback to canvas-based mapping
-        rippleX = oceanCanvas.width / 2;
-        rippleY = xAxisY;
-      }
-
-      // Position ripple at the top of the wave (fixed Y position)
-      const waveTopY = xAxisY - 150; // Fixed distance above x-axis
-
-      // Clear old ripples to prevent buildup
-      if (ripples.length > 4) {
-        ripples = ripples.slice(-2);
-      }
-
-      // Create single ripple at the top of the wave
-      ripples.push(new Ripple(rippleX, waveTopY));
+      // Create immediate ripple
+      createRippleAtCurrentPosition();
 
       lastTimelinePosition = currentTimelinePosition;
 
-      console.log("Timeline ripple created at:", rippleX, waveTopY, "noseX:", currentTimelinePosition);
+      // Start settle timer
+      settledTimeout = setTimeout(() => {
+        startPulsing();
+      }, SETTLE_DELAY);
     }
   }
 }

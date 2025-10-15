@@ -4,6 +4,11 @@ let xScale, g, startDate, endDate;
 let axisY = 4, rectHeight = 0.6, verticalPadding = 0.2;
 let aboveOffsetPadding = 3, belowOffsetPadding = 8;
 
+// Global variables to share data count information with ocean generative
+window.currentDataCount = 0;
+window.minDataCount = 1;
+window.maxDataCount = 1;
+
 // Category color mapping
 const categoryColors = {
   'Lifestyle': '#223D32',
@@ -200,6 +205,18 @@ fetch("data.json")
     const maxAbove = d3.max(withLocationByMonth.values());
     const maxBelow = d3.max(withoutLocationByMonth.values());
 
+    // Calculate min and max data counts across all months for ripple scaling
+    // Use ONLY top bar data (withoutLocation / is_alive === false)
+    window.minDataCount = d3.min(withoutLocationByMonth.values()) || 1;
+    window.maxDataCount = d3.max(withoutLocationByMonth.values()) || 1;
+
+    console.log(`Data count range across ALL months (top bar only): min=${window.minDataCount}, max=${window.maxDataCount}`);
+    console.log(`Total months with top bar data: ${withoutLocationByMonth.size}`);
+    console.log(`Top bar month counts:`, Array.from(withoutLocationByMonth.entries()).map(([month, count]) => ({
+      date: new Date(month).toISOString().slice(0, 7),
+      count
+    })));
+
     const topSpace = maxAbove * (rectHeight + verticalPadding);
     const bottomSpace = maxBelow * (rectHeight + verticalPadding);
     const separationPadding = 100;
@@ -249,6 +266,10 @@ function goFullScreen() {
 
 function drawClusterRects(dataArray, yFunc, useSnowPattern = false) {
   const typeGroups = new Map();
+  console.log("dataArray length:", dataArray);
+
+  // Don't update currentDataCount here - it should be based on specific date position
+  // dataArray contains all visible items across the time window, not a specific date
 
   // group by type and month
   const groupedData = d3.rollup(
@@ -259,7 +280,6 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false) {
   );
 
   const typeBoxInfoList = [];
-
   // draw all rect and bounding box，collect label
   groupedData.forEach((monthMap, type) => {
     const typePositions = [];
@@ -429,11 +449,12 @@ function updateVisibleData(noseX) {
 
 
   let from = startDate, to = endDate;
+  let centerTimeRaw = null;
   if (noseX !== null && noseX !== undefined) {
     const percent = 1 - Math.min(Math.max(noseX / videoWidth, 0), 1);
     const windowMonths = 1;
     const fullRange = endDate - startDate;
-    const centerTimeRaw = new Date(+startDate + percent * fullRange);
+    centerTimeRaw = new Date(+startDate + percent * fullRange);
 
     from = d3.timeMonth.offset(centerTimeRaw, -windowMonths / 2);
     to = d3.timeMonth.offset(centerTimeRaw, windowMonths / 2);
@@ -478,6 +499,23 @@ function updateVisibleData(noseX) {
   const visibleWithout = withoutLocation
     .filter(d => d.monthObj >= from && d.monthObj <= to)
     .sort((a, b) => a.monthObj - b.monthObj || (a.type1_cluster || "").localeCompare(b.type1_cluster || ""));
+
+  // Calculate data count for the specific center date (where ripple will be created)
+  // Use ONLY top bar data (withoutLocation / is_alive === false)
+  if (centerTimeRaw) {
+    const centerMonth = new Date(centerTimeRaw.getFullYear(), centerTimeRaw.getMonth(), 1);
+    const centerMonthTime = +centerMonth;
+
+    // Count ONLY withoutLocation items at the center month (top bar only)
+    const itemsAtCenter = withoutLocation.filter(d => +d.monthObj === centerMonthTime).length;
+
+    window.currentDataCount = itemsAtCenter;
+    console.log(`Center date data count (top bar only): ${itemsAtCenter} at month ${centerMonth.toISOString()}`);
+  } else {
+    // If no specific position, use total count in visible range (top bar only)
+    window.currentDataCount = visibleWithout.length;
+    console.log(`Full range data count (top bar only): ${window.currentDataCount}`);
+  }
 
 
   const ABOVE_PADDING = 30;
