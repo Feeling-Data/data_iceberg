@@ -5,6 +5,22 @@ let waveOffset = 0;
 let oceanCanvas;
 let ctx;
 
+// EXPERIMENTAL: Ocean morphing controls - adjust these to see different effects!
+window.morphSpeed = 1.2; // How fast patterns shift (try 0.5 to 3.0)
+window.morphScale = 0.008; // Size of morphing patterns (try 0.005 to 0.02)
+window.bandIntensity = 8; // Strength of color bands - SUBTLE (try 5 to 15)
+window.bandSpeed = 0.4; // Speed of band movement (try 0.2 to 1.0)
+window.staticShiftAmount = 0.08; // How much static varies - SUBTLE (try 0.05 to 0.15)
+
+// RIPPLE CONTROLS - Customize how ripples appear and behave
+window.rippleRingCount = 10; // Number of concentric rings (try 5 to 20)
+window.rippleRingSpacing = 80; // Distance between rings in pixels (try 40 to 150)
+window.rippleRingThickness = 40; // How thick each ring band is (try 20 to 80)
+window.rippleWaveIntensity = 35; // How much ripples distort pixels (try 15 to 60)
+window.rippleWaveFrequency = 0.15; // How wavy the rings are (try 0.05 to 0.3)
+window.rippleExpansionSpeed = 8; // How fast ripples expand (try 3 to 15)
+window.rippleStrengthFalloff = 0.08; // How quickly rings fade with distance (try 0.03 to 0.15)
+
 // Ripple effect variables
 let ripples = [];
 let lastNoseX = null;
@@ -56,7 +72,7 @@ class Ripple {
     const radiusScale = minScale + (normalizedCount * (maxScale - minScale));
     this.maxRadius = baseMaxRadius * radiusScale;
 
-    this.speed = 8; // Expansion speed
+    this.speed = window.rippleExpansionSpeed; // Expansion speed (controllable)
     this.strength = 1;
     this.life = 1.0; // Life starts at 1.0
 
@@ -116,19 +132,23 @@ class Ripple {
     const dist = Math.sqrt((px - this.x) ** 2 + (py - this.y) ** 2);
 
     if (this.totalStrength > 0) {
-      for (let ringIndex = 0; ringIndex < 10; ringIndex++) {
-        const ringRadius = this.radius - (ringIndex * 80);
+      // Use controllable ring count
+      for (let ringIndex = 0; ringIndex < window.rippleRingCount; ringIndex++) {
+        // Use controllable ring spacing
+        const ringRadius = this.radius - (ringIndex * window.rippleRingSpacing);
         const distFromRing = Math.abs(dist - ringRadius);
 
-        if (distFromRing < 40 && ringRadius > 0 && ringRadius < this.radius + 200) {
-          // Ring strength decreases with distance from center
-          const ringStrength = this.totalStrength * (1 - ringIndex * 0.08) * (1 - dist / (this.maxRadius * 0.95));
-          const localStrength = (1 - distFromRing / 40) * ringStrength;
+        // Use controllable ring thickness
+        if (distFromRing < window.rippleRingThickness && ringRadius > 0 && ringRadius < this.radius + 200) {
+          // Ring strength decreases with distance from center (controllable falloff)
+          const ringStrength = this.totalStrength * (1 - ringIndex * window.rippleStrengthFalloff) * (1 - dist / (this.maxRadius * 0.95));
+          const localStrength = (1 - distFromRing / window.rippleRingThickness) * ringStrength;
 
-          // Create ring wave pattern with multiple frequencies
-          const waveFreq = 0.15 + (ringIndex * 0.05);
+          // Create ring wave pattern with controllable frequency
+          const waveFreq = window.rippleWaveFrequency + (ringIndex * 0.05);
           const ringWave = Math.sin(distFromRing * waveFreq + ringIndex * 0.6) * localStrength;
-          return ringWave * 35;
+          // Apply controllable wave intensity
+          return ringWave * window.rippleWaveIntensity;
         }
       }
     }
@@ -265,7 +285,7 @@ function calculatePulseInterval(dataCount) {
   const maxRadius = baseMaxRadius * radiusScale;
 
   // Calculate lifetime
-  const speed = 8;
+  const speed = window.rippleExpansionSpeed;
   const framesToReachMax = maxRadius / speed;
   const lifeBuffer = 1.3 + (1 - normalizedCount) * 0.5;
 
@@ -554,24 +574,50 @@ function drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha) {
 
   dynamicPixelSize = Math.max(4, Math.min(12, dynamicPixelSize));
 
-  // Subtle static for calm ocean background
-  let staticNoise = hasRippleEffect ?
-    (Math.random() * 0.4 + 0.8) : // 0.8 to 1.2 when ripples present
-    (Math.random() * 0.1 + 0.95); // 0.95 to 1.05 when calm - minimal variation
+  // ACTIVE MORPHING PATTERNS - Large scale shifting across the ocean
+  let morphPattern1 = Math.sin(x * window.morphScale + time * window.morphSpeed) *
+    Math.cos(y * window.morphScale * 0.8 + time * window.morphSpeed * 0.7);
+  let morphPattern2 = Math.sin((x + y) * window.morphScale * 0.5 + time * window.morphSpeed * 0.5) *
+    Math.cos((x - y) * window.morphScale * 0.6 + time * window.morphSpeed * 0.8);
 
-  // Subtle noise layers for gentle morphing
+  // Combine patterns for complex movement
+  let morphValue = (morphPattern1 + morphPattern2) / 2;
+
+  // Static noise that shifts with the morphing patterns - SUBTLE range
+  let baseStaticIntensity = hasRippleEffect ? 0.3 : 0.04; // Lower base for calm
+  let morphingStaticIntensity = baseStaticIntensity + (morphValue * window.staticShiftAmount);
+
+  let staticNoise = hasRippleEffect ?
+    (Math.random() * 0.4 + 0.8) :
+    // Compress the range for subtle variation: instead of 0-1, use 0.92-1.04
+    (Math.random() * morphingStaticIntensity * 0.6 + (1 - morphingStaticIntensity * 0.3));
+
+  // Noise layers for additional texture
   let noiseVal1 = Math.sin(x * 0.02 + time * 0.5) * Math.cos(y * 0.015 + time * 0.4) * Math.sin(time * 0.8);
   let noiseVal2 = Math.sin(x * 0.01 + time * 0.3) * Math.cos(y * 0.012 + time * 0.6) * Math.sin(time * 0.5);
 
   let noiseVal = (noiseVal1 + noiseVal2 * 0.6) / 1.6;
 
-  // Minimal noise intensity to keep ripples prominent
+  // Scale noise based on ripple presence
   if (!hasRippleEffect) {
-    noiseVal *= 0.2; // Very subtle noise variation
+    noiseVal *= 0.3; // Subtle when calm
   }
 
   // Ocean depth affects color (only below wave)
   let depthFactor = (y - waveY) / (oceanCanvas.height - waveY);
+
+  // SHIFTING COLOR BANDS - Diagonal bands that move across the ocean
+  let bandAngle = time * window.bandSpeed; // Rotating angle
+  let bandX = Math.cos(bandAngle);
+  let bandY = Math.sin(bandAngle);
+  let bandPosition = (x / oceanCanvas.width) * bandX + ((y - waveY) / oceanCanvas.height) * bandY;
+  let bandPattern = Math.sin(bandPosition * Math.PI * 4 + time * window.bandSpeed * 2);
+
+  // Create visible color shifts from the bands
+  let colorBandEffect = bandPattern * window.bandIntensity;
+
+  // Add morphing pattern to create flowing effect
+  let flowingColor = morphValue * window.bandIntensity * 0.8;
 
   // Below water - deeper blues with more variation near the jagged edge
   let edgeProximity = Math.max(0, 1 - (y - waveY) / 20); // How close to the jagged edge
@@ -582,9 +628,10 @@ function drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha) {
     (Math.random() - 0.5) * (10 + edgeVariation) : // Normal variation with ripples
     0; // No random variation in calm areas to prevent black pixels
 
-  let r = 5 + depthFactor * 15 + noiseVal * 10 + randomVariation;
-  let g = 15 + depthFactor * 25 + noiseVal * 15 + randomVariation * 1.2;
-  let b = 35 + depthFactor * 50 + noiseVal * 20 + randomVariation * 1.5;
+  // Base colors with band and morphing effects applied
+  let r = 5 + depthFactor * 15 + noiseVal * 10 + randomVariation + colorBandEffect * 0.3 + flowingColor;
+  let g = 15 + depthFactor * 25 + noiseVal * 15 + randomVariation * 1.2 + colorBandEffect * 0.6 + flowingColor * 1.2;
+  let b = 35 + depthFactor * 50 + noiseVal * 20 + randomVariation * 1.5 + colorBandEffect + flowingColor * 0.8;
 
   // Ensure minimum blue values in calm areas to prevent black pixels
   if (!hasRippleEffect) {

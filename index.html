@@ -140,6 +140,116 @@
           stroke-opacity: 0.8;
         }
       }
+
+      /* Ocean Controls Panel */
+      #ocean-controls {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        background: rgba(0, 0, 0, 0.85);
+        padding: 20px;
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        min-width: 280px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      #ocean-controls h3 {
+        margin: 0 0 15px 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #fff;
+      }
+
+      .control-group {
+        margin-bottom: 18px;
+      }
+
+      .control-group label {
+        display: block;
+        font-size: 12px;
+        margin-bottom: 6px;
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 500;
+      }
+
+      .control-group .value-display {
+        float: right;
+        color: rgba(100, 200, 255, 0.9);
+        font-family: monospace;
+      }
+
+      .control-group input[type="range"] {
+        width: 100%;
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.1);
+        outline: none;
+        -webkit-appearance: none;
+        appearance: none;
+      }
+
+      .control-group input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: rgba(100, 200, 255, 0.9);
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .control-group input[type="range"]::-webkit-slider-thumb:hover {
+        background: rgba(100, 200, 255, 1);
+        transform: scale(1.1);
+      }
+
+      .control-group input[type="range"]::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: rgba(100, 200, 255, 0.9);
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s;
+      }
+
+      .control-group input[type="range"]::-moz-range-thumb:hover {
+        background: rgba(100, 200, 255, 1);
+        transform: scale(1.1);
+      }
+
+      .control-hint {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.5);
+        margin-top: 3px;
+      }
+
+      #toggle-controls-btn {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1001;
+        background: rgba(0, 0, 0, 0.85);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 10px 15px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-family: 'Neue Haas Grotesk Display Pro', sans-serif;
+        font-size: 12px;
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+      }
+
+      #toggle-controls-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.4);
+      }
     </style>
   </head>
 
@@ -147,6 +257,124 @@
     <!-- Generative Ocean Background -->
     <div id="generative-container">
       <!-- <canvas id="ocean-generative"></canvas> -->
+    </div>
+
+    <!-- Ocean Controls Panel -->
+    <button id="toggle-controls-btn" onclick="toggleControls()">🎛️ Ocean Controls</button>
+    <div id="ocean-controls" style="display: none;">
+      <h3>Ocean Morphing Controls</h3>
+
+      <div class="control-group">
+        <label>
+          Morph Speed
+          <span class="value-display" id="morphSpeed-value">1.20</span>
+        </label>
+        <input type="range" id="morphSpeed" min="0.1" max="3.0" step="0.1" value="1.2">
+        <div class="control-hint">How fast patterns shift</div>
+      </div>
+
+      <div class="control-group">
+        <label>
+          Morph Scale
+          <span class="value-display" id="morphScale-value">0.008</span>
+        </label>
+        <input type="range" id="morphScale" min="0.003" max="0.025" step="0.001" value="0.008">
+        <div class="control-hint">Size of patterns (lower = larger)</div>
+      </div>
+
+      <div class="control-group">
+        <label>
+          Band Intensity
+          <span class="value-display" id="bandIntensity-value">8</span>
+        </label>
+        <input type="range" id="bandIntensity" min="3" max="25" step="1" value="8">
+        <div class="control-hint">Visibility of color bands</div>
+      </div>
+
+      <div class="control-group">
+        <label>
+          Band Speed
+          <span class="value-display" id="bandSpeed-value">0.40</span>
+        </label>
+        <input type="range" id="bandSpeed" min="0.1" max="1.5" step="0.05" value="0.4">
+        <div class="control-hint">How fast bands rotate</div>
+      </div>
+
+      <div class="control-group">
+        <label>
+          Static Shift
+          <span class="value-display" id="staticShiftAmount-value">0.08</span>
+        </label>
+        <input type="range" id="staticShiftAmount" min="0.02" max="0.3" step="0.01" value="0.08">
+        <div class="control-hint">How much static varies</div>
+      </div>
+
+      <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 20px 0;">
+
+      <h3 style="margin-bottom: 15px;">Ripple Controls</h3>
+
+      <div class="control-group">
+        <label>
+          Ring Count
+          <span class="value-display" id="rippleRingCount-value">10</span>
+        </label>
+        <input type="range" id="rippleRingCount" min="3" max="20" step="1" value="10">
+        <div class="control-hint">Number of concentric rings</div>
+      </div>
+
+      <div class="control-group">
+        <label>
+          Ring Spacing
+          <span class="value-display" id="rippleRingSpacing-value">80</span>
+        </label>
+        <input type="range" id="rippleRingSpacing" min="30" max="150" step="5" value="80">
+        <div class="control-hint">Distance between rings</div>
+      </div>
+
+      <div class="control-group">
+        <label>
+          Ring Thickness
+          <span class="value-display" id="rippleRingThickness-value">40</span>
+        </label>
+        <input type="range" id="rippleRingThickness" min="15" max="100" step="5" value="40">
+        <div class="control-hint">How thick each ring is</div>
+      </div>
+
+      <div class="control-group">
+        <label>
+          Wave Intensity
+          <span class="value-display" id="rippleWaveIntensity-value">35</span>
+        </label>
+        <input type="range" id="rippleWaveIntensity" min="10" max="80" step="5" value="35">
+        <div class="control-hint">Pixel distortion strength</div>
+      </div>
+
+      <div class="control-group">
+        <label>
+          Wave Frequency
+          <span class="value-display" id="rippleWaveFrequency-value">0.15</span>
+        </label>
+        <input type="range" id="rippleWaveFrequency" min="0.05" max="0.4" step="0.05" value="0.15">
+        <div class="control-hint">How wavy the rings are</div>
+      </div>
+
+      <div class="control-group">
+        <label>
+          Expansion Speed
+          <span class="value-display" id="rippleExpansionSpeed-value">8</span>
+        </label>
+        <input type="range" id="rippleExpansionSpeed" min="2" max="20" step="1" value="8">
+        <div class="control-hint">How fast ripples expand</div>
+      </div>
+
+      <div class="control-group">
+        <label>
+          Strength Falloff
+          <span class="value-display" id="rippleStrengthFalloff-value">0.08</span>
+        </label>
+        <input type="range" id="rippleStrengthFalloff" min="0.02" max="0.2" step="0.01" value="0.08">
+        <div class="control-hint">How quickly rings fade</div>
+      </div>
     </div>
 
     <!-- Content above the background -->
@@ -160,6 +388,63 @@
     <script src="js/timeline.js"></script>
     <script src="js/poseDetection.js"></script>
     <script src="js/oceanGenerative.js"></script>
+
+    <script>
+      // Toggle controls panel
+      function toggleControls() {
+        const panel = document.getElementById('ocean-controls');
+        const btn = document.getElementById('toggle-controls-btn');
+        if (panel.style.display === 'none') {
+          panel.style.display = 'block';
+          btn.textContent = '✕ Close Controls';
+        } else {
+          panel.style.display = 'none';
+          btn.textContent = '🎛️ Ocean Controls';
+        }
+      }
+
+      // Wire up sliders to ocean variables
+      function setupOceanControls() {
+        const controls = [
+          // Ocean morphing controls
+          { id: 'morphSpeed', varName: 'morphSpeed', decimals: 2 },
+          { id: 'morphScale', varName: 'morphScale', decimals: 3 },
+          { id: 'bandIntensity', varName: 'bandIntensity', decimals: 0 },
+          { id: 'bandSpeed', varName: 'bandSpeed', decimals: 2 },
+          { id: 'staticShiftAmount', varName: 'staticShiftAmount', decimals: 2 },
+          // Ripple controls
+          { id: 'rippleRingCount', varName: 'rippleRingCount', decimals: 0 },
+          { id: 'rippleRingSpacing', varName: 'rippleRingSpacing', decimals: 0 },
+          { id: 'rippleRingThickness', varName: 'rippleRingThickness', decimals: 0 },
+          { id: 'rippleWaveIntensity', varName: 'rippleWaveIntensity', decimals: 0 },
+          { id: 'rippleWaveFrequency', varName: 'rippleWaveFrequency', decimals: 2 },
+          { id: 'rippleExpansionSpeed', varName: 'rippleExpansionSpeed', decimals: 0 },
+          { id: 'rippleStrengthFalloff', varName: 'rippleStrengthFalloff', decimals: 2 }
+        ];
+
+        controls.forEach(control => {
+          const slider = document.getElementById(control.id);
+          const valueDisplay = document.getElementById(`${control.id}-value`);
+
+          if (slider && valueDisplay) {
+            slider.addEventListener('input', function () {
+              const value = parseFloat(this.value);
+              // Update the ocean variable directly
+              window[control.varName] = value;
+              // Update display
+              valueDisplay.textContent = value.toFixed(control.decimals);
+            });
+          }
+        });
+      }
+
+      // Initialize controls when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupOceanControls);
+      } else {
+        setupOceanControls();
+      }
+    </script>
 
     <button onclick="goFullScreen()">fullpage</button>
 
