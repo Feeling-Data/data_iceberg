@@ -193,29 +193,20 @@ function checkForTimelineChanges() {
         rippleY = xAxisY;
       }
 
-      // Ensure ripple appears exactly at x-axis level, not deep in ocean
-      rippleY = xAxisY;
-
-      // Fewer ripples for distinct droplet effect
-      const waveHeight = Math.min(250, oceanCanvas.height - xAxisY); // Match ocean height
-      const rippleCount = 2; // Fewer ripples for distinct droplets
+      // Position ripple at the top of the wave (fixed Y position)
+      const waveTopY = xAxisY - 150; // Fixed distance above x-axis
 
       // Clear old ripples to prevent buildup
       if (ripples.length > 4) {
         ripples = ripples.slice(-2);
       }
 
-      for (let i = 0; i < rippleCount; i++) {
-        const rippleSpacing = waveHeight / (rippleCount - 1);
-        const currentRippleY = xAxisY + (i * rippleSpacing);
-        const cascadeDelay = i * 15; // Longer delay for distinct droplets
-
-        ripples.push(new Ripple(rippleX, currentRippleY, cascadeDelay));
-      }
+      // Create single ripple at the top of the wave
+      ripples.push(new Ripple(rippleX, waveTopY));
 
       lastTimelinePosition = currentTimelinePosition;
 
-      console.log("Timeline ripple created at:", rippleX, rippleY, "noseX:", currentTimelinePosition);
+      console.log("Timeline ripple created at:", rippleX, waveTopY, "noseX:", currentTimelinePosition);
     }
   }
 }

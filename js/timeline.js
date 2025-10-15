@@ -501,7 +501,7 @@ function updateVisibleData(noseX) {
   drawClusterRects(
     visibleWithout,
     d => axisY + 30 + BELOW_PADDING + getOffset(d.monthObj, belowOffsetMap) * (rectHeight + verticalPadding),
-    true  // Use snow pattern
+    false  // Use category colors like upper bar
   );
 }
 
