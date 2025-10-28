@@ -567,9 +567,13 @@ function drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha) {
   let rippleOffset = 0;
   if (ripples.length > 0) {
     for (let ripple of ripples) {
-      // Skip distant ripples for performance
-      const distToRipple = Math.sqrt((x - ripple.x) ** 2 + (y - ripple.y) ** 2);
-      if (distToRipple < ripple.radius + 100) { // Only check nearby ripples
+      // Skip distant ripples for performance - use squared distance to avoid sqrt
+      const dx = x - ripple.x;
+      const dy = y - ripple.y;
+      const distSquared = dx * dx + dy * dy;
+      const maxDistSquared = (ripple.radius + 100) ** 2;
+
+      if (distSquared < maxDistSquared) {
         rippleOffset += ripple.getEffect(x, y);
       }
     }
@@ -582,14 +586,19 @@ function drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha) {
   let displayX = x + Math.cos(rippleOffset * 0.1) * rippleOffset * 0.5;
   let displayY = y + Math.sin(rippleOffset * 0.1) * rippleOffset * 0.5;
 
-  // Dynamic pixel size with subtle variation
+  // Dynamic pixel size with subtle variation - cache calculations for performance
   let dynamicPixelSize = window.pixelSize;
+
+  // Cache common trigonometric calculations
+  const xTime1 = x * 0.03 + time * 2;
+  const yTime1 = y * 0.02 + time * 1.5;
+  const combinedTime1 = time * 4 + x * 0.01;
 
   if (hasRippleEffect) {
     // More dramatic size variation when ripples are present
-    let sizeVariation = Math.sin(x * 0.03 + time * 2) * 2 +
-      Math.cos(y * 0.02 + time * 1.5) * 1.5 +
-      Math.sin(time * 4 + x * 0.01) * 1;
+    let sizeVariation = Math.sin(xTime1) * 2 +
+      Math.cos(yTime1) * 1.5 +
+      Math.sin(combinedTime1) * 1;
 
     // Add ripple effect to size variation
     sizeVariation += Math.abs(rippleOffset) * 0.2;
@@ -603,11 +612,14 @@ function drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha) {
 
   dynamicPixelSize = Math.max(4, Math.min(12, dynamicPixelSize));
 
-  // ACTIVE MORPHING PATTERNS - Large scale shifting across the ocean
-  let morphPattern1 = Math.sin(x * window.morphScale + time * window.morphSpeed) *
-    Math.cos(y * window.morphScale * 0.8 + time * window.morphSpeed * 0.7);
-  let morphPattern2 = Math.sin((x + y) * window.morphScale * 0.5 + time * window.morphSpeed * 0.5) *
-    Math.cos((x - y) * window.morphScale * 0.6 + time * window.morphSpeed * 0.8);
+  // ACTIVE MORPHING PATTERNS - Large scale shifting across the ocean (cached for performance)
+  const morphX = x * window.morphScale + time * window.morphSpeed;
+  const morphY = y * window.morphScale * 0.8 + time * window.morphSpeed * 0.7;
+  const morphXY = (x + y) * window.morphScale * 0.5 + time * window.morphSpeed * 0.5;
+  const morphXYDiff = (x - y) * window.morphScale * 0.6 + time * window.morphSpeed * 0.8;
+
+  let morphPattern1 = Math.sin(morphX) * Math.cos(morphY);
+  let morphPattern2 = Math.sin(morphXY) * Math.cos(morphXYDiff);
 
   // Combine patterns for complex movement
   let morphValue = (morphPattern1 + morphPattern2) / 2;

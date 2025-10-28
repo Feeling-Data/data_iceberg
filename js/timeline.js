@@ -367,7 +367,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
         const rectAnim = rectSelection
           .transition()
           .duration(DRAW_DURATION)
-          .attr("opacity", opacity === .4 ? .25 : 0.8);
+          .attr("opacity", opacity === .4 ? .25 : 1);
         activeAnimations.push(rectAnim);
       });
 
