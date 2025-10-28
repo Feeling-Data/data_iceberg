@@ -264,7 +264,7 @@ function goFullScreen() {
 }
 
 
-function drawClusterRects(dataArray, yFunc, useSnowPattern = false) {
+function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.0) {
   const typeGroups = new Map();
   console.log("dataArray length:", dataArray);
 
@@ -297,14 +297,14 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false) {
         const category = d.type1_cluster || "undefined";
         const fillColor = useSnowPattern ? "url(#snownoise-pattern)" : getCategoryColor(category);
 
-        // Draw rect with full opacity initially
+        // Draw rect with specified opacity
         const rect = g.append("rect")
           .attr("x", x)
           .attr("y", y)
           .attr("width", 15)
           .attr("height", rectHeight)
           .attr("fill", fillColor)
-          .attr("opacity", 1.0)
+          .attr("opacity", opacity)
           .attr("class", `type-rect type-${type.replace(/\s+/g, '-')}`);
 
         // Store rect reference before adding title
@@ -367,7 +367,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false) {
         const rectAnim = rectSelection
           .transition()
           .duration(DRAW_DURATION)
-          .attr("opacity", 0.6);
+          .attr("opacity", opacity === .4 ? .25 : 0.8);
         activeAnimations.push(rectAnim);
       });
 
@@ -420,7 +420,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false) {
           .transition()
           .delay(1000)
           .duration(400)
-          .style("opacity", 1);
+          .style("opacity", opacity);
 
         // Add label text - vertically centered on the square
         g.append("text")
@@ -533,13 +533,15 @@ function updateVisibleData(noseX) {
   drawClusterRects(
     visibleWith,
     d => axisY - 35 - ABOVE_PADDING - (getOffset(d.monthObj, aboveOffsetMap) + 1) * (rectHeight + verticalPadding),
-    false  // Use category colors
+    false,  // Use category colors
+    1.0     // Full opacity for top bar
   );
 
   drawClusterRects(
     visibleWithout,
     d => axisY + 30 + BELOW_PADDING + getOffset(d.monthObj, belowOffsetMap) * (rectHeight + verticalPadding),
-    false  // Use category colors like upper bar
+    false,  // Use category colors like upper bar
+    .4    // Semi-transparent for bottom bar
   );
 }
 
