@@ -127,9 +127,14 @@ setInterval(updateSnowNoise, 100); // dynamic noise
 
 
 
+console.log("Starting data fetch...");
 fetch("data.json")
-  .then(res => res.json())
+  .then(res => {
+    console.log("Data fetch response:", res);
+    return res.json();
+  })
   .then(data => {
+    console.log("Data loaded successfully, length:", data.length);
     const parseDate = d3.timeParse("%d/%m/%Y");
 
     const withDate = [];
@@ -169,9 +174,10 @@ fetch("data.json")
 
     const totalMonths = d3.timeMonth.count(startDate, endDate);
     const pixelsPerMonth = 25; // Increased from daily to monthly scale
-    const svgWidth = totalMonths * pixelsPerMonth;
+    const svgWidth = 5760;
 
-    const svg = d3.select("#timeline").attr("width", svgWidth);
+    const svg = d3.select("#timeline").attr("width", svgWidth).attr("height", 1080);
+    console.log("SVG created with dimensions:", svg.attr("width"), "x", svg.attr("height"));
     const defs = svg.append("defs");
 
     // dynamic noise pattern
@@ -190,10 +196,6 @@ fetch("data.json")
 
     const margin = { top: 40, right: 20, bottom: 40, left: 50 };
     const width = svgWidth - margin.left - margin.right;
-    // g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-    const scaleFactor = 0.7;
-    g = svg.append("g")
-      .attr("transform", `translate(${margin.left},${margin.top}) scale(${scaleFactor})`);
 
     xScale = d3.scaleTime().domain([startDate, endDate]).range([0, width]);
     const xAxis = d3.axisBottom(xScale).ticks(d3.timeMonth.every(1)).tickFormat(d3.timeFormat("%b %Y"));
@@ -225,16 +227,29 @@ fetch("data.json")
     axisY = separationPadding + topSpace + axisHeightPadding;
     const dynamicHeight = axisY + bottomSpace + separationPadding;
 
+    // Height already set to 1080px above
+    // Position timeline higher up in the 1080px height
+    const svgHeight = 1080;
+    const centerY = svgHeight * 1.6 / 3; // Move to upper third instead of center
+
+    // Adjust axisY to be positioned higher up
+    axisY = centerY;
+
+    // Create g element positioned for centered timeline
+    g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
 
     const noDateLineY = axisY + 100;
 
-    svg.attr("height", dynamicHeight + margin.top + margin.bottom);
-
-    g.append("g")
+    const xAxisGroup = g.append("g")
       .attr("class", "x-axis")
       .attr("transform", `translate(0,${axisY})`)
       .call(xAxis)
-      .style("font-size", "10px");
+      .style("font-size", "16px");
+
+    console.log("X-axis group created:", xAxisGroup);
+    console.log("SVG after x-axis:", svg.node().innerHTML);
+    console.log("SVG children count:", svg.node().children.length);
 
   });
 
@@ -314,7 +329,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
         const rect = g.append("rect")
           .attr("x", x)
           .attr("y", y)
-          .attr("width", 15)
+          .attr("width", 20)
           .attr("height", rectHeight)
           .attr("fill", fillColor)
           .attr("opacity", opacity)
@@ -337,7 +352,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
 
       const padding = 0.5;
       const minX = d3.min(xs) - padding;
-      const maxX = d3.max(xs) + 15 + padding;
+      const maxX = d3.max(xs) + 20 + padding;
       const minY = d3.min(ys) - padding;
       const maxY = d3.max(ys) + rectHeight + padding;
 
@@ -441,7 +456,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
           .attr("x", targetX + 5)
           .attr("y", labelY + 2)
           .attr("fill", "white")
-          .attr("font-size", "9px")
+          .attr("font-size", "14px")
           .attr("text-anchor", "start")
           .attr("dominant-baseline", "central")
           .attr("class", `person-${personId}`)
@@ -506,7 +521,7 @@ function updateVisibleData(noseX, personId = 1) {
       .call(xAxis);
 
     xAxisG.selectAll(".tick text")
-      .style("font-size", "11px")
+      .style("font-size", "16px")
       .attr("transform", "rotate(-45)")
       .style("text-anchor", "end")
       .style("fill", "#FFF")
@@ -515,7 +530,7 @@ function updateVisibleData(noseX, personId = 1) {
       })
       .style("fill", "#FFF")
       .style("font-weight", "700")
-      .style("font-size", "12px");
+      .style("font-size", "16px");
   }
 
 
@@ -558,7 +573,7 @@ function updateVisibleData(noseX, personId = 1) {
 
 
   const ABOVE_PADDING = 30;
-  const BELOW_PADDING = 50;
+  const BELOW_PADDING = 80;
 
   // Create fresh offset maps for each person to avoid interference
   // Reset offset maps on each movement to prevent stacking issues

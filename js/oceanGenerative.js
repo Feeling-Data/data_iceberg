@@ -1,5 +1,5 @@
 // Ocean-inspired generative piece with static-y pixelated gradients
-window.pixelSize = 5; // Larger pixels for better performance - globally accessible
+window.pixelSize = 10; // Larger pixels for better performance - globally accessible
 let time = 0;
 let waveOffset = 0;
 let oceanCanvas;
@@ -255,7 +255,7 @@ function createRippleAtCurrentPosition(personId = 1) {
   }
 
   // Position ripple at the top of the wave (fixed Y position)
-  const waveTopY = xAxisY - 150; // Fixed distance above x-axis
+  const waveTopY = xAxisY - 20; // Fixed distance above x-axis
 
   // Store position for pulsing based on person
   if (personId === 1) {
@@ -585,7 +585,7 @@ function getJaggedWaveY(x) {
   const waveAmplitude = 8; // Main wave amplitude (reduced)
 
   // Position the wave higher - make it reach well above x-axis
-  let baseY = xAxisY - maxJaggedness - waveAmplitude - 180; // Much taller wave
+  let baseY = xAxisY - maxJaggedness - waveAmplitude; // Much taller wave
 
   // Add the main wave oscillation (reduced amplitude)
   baseY += Math.sin(x * 0.01 + waveOffset) * 8;
@@ -626,8 +626,14 @@ function drawSkyArea() {
 function drawOceanBackground() {
   // Draw gradient background under the wave to hide the light sky gradient
   const xAxisY = getXAxisPosition();
-  const backgroundStartY = xAxisY - 190; // Start higher to better cover the wave area
+  const backgroundStartY = xAxisY - 30; // Start higher to better cover the wave area
   const backgroundHeight = oceanCanvas.height - backgroundStartY; // Extend to full canvas height
+
+  // Save the current context state
+  ctx.save();
+
+  // Apply blur filter to the ocean background
+  ctx.filter = 'blur(10px)'; // Adjust blur amount as needed (1-10px)
 
   // Create the specified gradient - make it solid, not transparent
   const gradient = ctx.createLinearGradient(0, backgroundStartY, 0, backgroundStartY + backgroundHeight);
@@ -637,12 +643,15 @@ function drawOceanBackground() {
 
   ctx.fillStyle = gradient;
   ctx.fillRect(0, backgroundStartY, oceanCanvas.width, backgroundHeight);
+
+  // Restore the context state to remove the blur filter
+  ctx.restore();
 }
 
 function drawPixelatedNoise() {
   // Draw pixelated noise with smooth wave boundary
   const xAxisY = getXAxisPosition();
-  const waveEndY = Math.min(oceanCanvas.height, xAxisY + 250); // Taller ocean - 250px below
+  const waveEndY = Math.min(oceanCanvas.height, xAxisY + 425); // Taller ocean - 250px below
 
   // Use smaller step size for smoother wave edge
   const step = window.pixelSize / 2; // Half-size steps for smoother rendering
