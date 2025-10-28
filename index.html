@@ -267,9 +267,9 @@
       <div class="control-group">
         <label>
           Morph Speed
-          <span class="value-display" id="morphSpeed-value">1.20</span>
+          <span class="value-display" id="morphSpeed-value">3.00</span>
         </label>
-        <input type="range" id="morphSpeed" min="0.1" max="3.0" step="0.1" value="1.2">
+        <input type="range" id="morphSpeed" min="0.1" max="3.0" step="0.1" value="3.0">
         <div class="control-hint">How fast patterns shift</div>
       </div>
 
@@ -285,28 +285,37 @@
       <div class="control-group">
         <label>
           Band Intensity
-          <span class="value-display" id="bandIntensity-value">8</span>
+          <span class="value-display" id="bandIntensity-value">4</span>
         </label>
-        <input type="range" id="bandIntensity" min="3" max="25" step="1" value="8">
+        <input type="range" id="bandIntensity" min="3" max="25" step="1" value="4">
         <div class="control-hint">Visibility of color bands</div>
       </div>
 
       <div class="control-group">
         <label>
           Band Speed
-          <span class="value-display" id="bandSpeed-value">0.40</span>
+          <span class="value-display" id="bandSpeed-value">1.50</span>
         </label>
-        <input type="range" id="bandSpeed" min="0.1" max="1.5" step="0.05" value="0.4">
+        <input type="range" id="bandSpeed" min="0.1" max="1.5" step="0.05" value="1.5">
         <div class="control-hint">How fast bands rotate</div>
       </div>
 
       <div class="control-group">
         <label>
           Static Shift
-          <span class="value-display" id="staticShiftAmount-value">0.08</span>
+          <span class="value-display" id="staticShiftAmount-value">0.25</span>
         </label>
-        <input type="range" id="staticShiftAmount" min="0.02" max="0.3" step="0.01" value="0.08">
+        <input type="range" id="staticShiftAmount" min="0.02" max="0.3" step="0.01" value="0.25">
         <div class="control-hint">How much static varies</div>
+      </div>
+
+      <div class="control-group">
+        <label>
+          Pixel Size
+          <span class="value-display" id="pixelSize-value">5</span>
+        </label>
+        <input type="range" id="pixelSize" min="4" max="24" step="1" value="5">
+        <div class="control-hint">Size of ocean pixels</div>
       </div>
 
       <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 20px 0;">
@@ -412,6 +421,7 @@
           { id: 'bandIntensity', varName: 'bandIntensity', decimals: 0 },
           { id: 'bandSpeed', varName: 'bandSpeed', decimals: 2 },
           { id: 'staticShiftAmount', varName: 'staticShiftAmount', decimals: 2 },
+          { id: 'pixelSize', varName: 'pixelSize', decimals: 0 },
           // Ripple controls
           { id: 'rippleRingCount', varName: 'rippleRingCount', decimals: 0 },
           { id: 'rippleRingSpacing', varName: 'rippleRingSpacing', decimals: 0 },

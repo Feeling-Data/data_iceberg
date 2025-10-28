@@ -1,22 +1,22 @@
 // Ocean-inspired generative piece with static-y pixelated gradients
-let pixelSize = 12; // Larger pixels for better performance
+window.pixelSize = 5; // Larger pixels for better performance - globally accessible
 let time = 0;
 let waveOffset = 0;
 let oceanCanvas;
 let ctx;
 
 // EXPERIMENTAL: Ocean morphing controls - adjust these to see different effects!
-window.morphSpeed = 1.2; // How fast patterns shift (try 0.5 to 3.0)
+window.morphSpeed = 3; // How fast patterns shift (try 0.5 to 3.0)
 window.morphScale = 0.008; // Size of morphing patterns (try 0.005 to 0.02)
-window.bandIntensity = 8; // Strength of color bands - SUBTLE (try 5 to 15)
-window.bandSpeed = 0.4; // Speed of band movement (try 0.2 to 1.0)
-window.staticShiftAmount = 0.08; // How much static varies - SUBTLE (try 0.05 to 0.15)
+window.bandIntensity = 4; // Strength of color bands - SUBTLE (try 5 to 15)
+window.bandSpeed = 1.5; // Speed of band movement (try 0.2 to 1.0)
+window.staticShiftAmount = 0.25; // How much static varies - SUBTLE (try 0.05 to 0.15)
 
 // RIPPLE CONTROLS - Customize how ripples appear and behave
 window.rippleRingCount = 10; // Number of concentric rings (try 5 to 20)
 window.rippleRingSpacing = 80; // Distance between rings in pixels (try 40 to 150)
 window.rippleRingThickness = 40; // How thick each ring band is (try 20 to 80)
-window.rippleWaveIntensity = 35; // How much ripples distort pixels (try 15 to 60)
+window.rippleWaveIntensity = 15; // How much ripples distort pixels (try 15 to 60)
 window.rippleWaveFrequency = 0.15; // How wavy the rings are (try 0.05 to 0.3)
 window.rippleExpansionSpeed = 8; // How fast ripples expand (try 3 to 15)
 window.rippleStrengthFalloff = 0.08; // How quickly rings fade with distance (try 0.03 to 0.15)
@@ -428,6 +428,9 @@ function animate(currentTime) {
   // Draw smooth sky area above the wave
   drawSkyArea();
 
+  // Draw gradient background under the wave to hide sky gradient
+  drawOceanBackground();
+
   // Draw pixelated noise texture (only below wave)
   drawPixelatedNoise();
 
@@ -466,36 +469,62 @@ function getJaggedWaveY(x) {
   const xAxisY = getXAxisPosition();
 
   // Calculate the maximum possible jaggedness to position wave correctly
-  const maxJaggedness = 12 + 6 + 8; // Sum of all jaggedness amplitudes (much smoother)
-  const waveAmplitude = 20; // Main wave amplitude
+  const maxJaggedness = 5 + 3 + 2; // Sum of all jaggedness amplitudes (reduced for shorter waves)
+  const waveAmplitude = 8; // Main wave amplitude (reduced)
 
   // Position the wave higher - make it reach well above x-axis
   let baseY = xAxisY - maxJaggedness - waveAmplitude - 180; // Much taller wave
 
-  // Add the main wave oscillation
-  baseY += Math.sin(x * 0.01 + waveOffset) * 20;
+  // Add the main wave oscillation (reduced amplitude)
+  baseY += Math.sin(x * 0.01 + waveOffset) * 8;
 
-  // Smooth wave with only low-frequency components
+  // Smooth wave with only low-frequency components (reduced amplitudes)
   let smoothWave = 0;
-  smoothWave += Math.sin(x * 0.03 + waveOffset * 2) * 12; // Gentle medium frequency
-  smoothWave += Math.sin(x * 0.015 + waveOffset * 1.5) * 8; // Low frequency
-  smoothWave += Math.sin(x * 0.06 + waveOffset * 2.3) * 6; // Subtle detail
+  smoothWave += Math.sin(x * 0.03 + waveOffset * 2) * 5; // Gentle medium frequency
+  smoothWave += Math.sin(x * 0.015 + waveOffset * 1.5) * 3; // Low frequency
+  smoothWave += Math.sin(x * 0.06 + waveOffset * 2.3) * 2; // Subtle detail
 
   // Very minimal random variation for subtle texture
-  smoothWave += (Math.random() - 0.5) * 0.5; // Barely noticeable
+  smoothWave += (Math.random() - 0.5) * 0.3; // Barely noticeable
 
   return baseY + smoothWave;
 }
 
 function drawSkyArea() {
-  // Use simple gradient for performance
+  // Use gradient with specified colors (reversed)
   const xAxisY = getXAxisPosition();
   const gradient = ctx.createLinearGradient(0, 0, 0, xAxisY);
-  gradient.addColorStop(0, 'rgb(10, 20, 40)');
-  gradient.addColorStop(1, 'rgb(20, 35, 60)');
+
+  // Apply the custom gradient colors in reverse order
+  // #152346 at top (darkest) -> rgb(21, 35, 70)
+  gradient.addColorStop(0, 'rgb(21, 35, 70)');
+  // #314488 at 12.85% -> rgb(49, 68, 136)
+  gradient.addColorStop(0.1285, 'rgb(49, 68, 136)');
+  // #5E6FBA at 54.91% -> rgb(94, 111, 186)
+  gradient.addColorStop(0.5491, 'rgb(94, 111, 186)');
+  // #768EC9 at 84.74% -> rgb(118, 142, 201)
+  gradient.addColorStop(0.8474, 'rgb(118, 142, 201)');
+  // Extend to bottom (lightest)
+  gradient.addColorStop(1, 'rgb(118, 142, 201)');
 
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, oceanCanvas.width, xAxisY);
+}
+
+function drawOceanBackground() {
+  // Draw gradient background under the wave to hide the light sky gradient
+  const xAxisY = getXAxisPosition();
+  const backgroundStartY = xAxisY - 190; // Slightly lower than original -200, but not too low
+  const backgroundHeight = oceanCanvas.height - backgroundStartY; // Extend to full canvas height
+
+  // Create the specified gradient
+  const gradient = ctx.createLinearGradient(0, backgroundStartY, 0, backgroundStartY + backgroundHeight);
+  gradient.addColorStop(0, '#121FDA'); // 2.19% - bright blue
+  gradient.addColorStop(0.463, '#09003E'); // 46.3% - dark purple
+  gradient.addColorStop(0.848, 'rgba(9, 0, 62, 0.00)'); // 84.8% - transparent
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, backgroundStartY, oceanCanvas.width, backgroundHeight);
 }
 
 function drawPixelatedNoise() {
@@ -504,13 +533,13 @@ function drawPixelatedNoise() {
   const waveEndY = Math.min(oceanCanvas.height, xAxisY + 250); // Taller ocean - 250px below
 
   // Use smaller step size for smoother wave edge
-  const step = pixelSize / 2; // Half-size steps for smoother rendering
+  const step = window.pixelSize / 2; // Half-size steps for smoother rendering
 
-  for (let x = 0; x < oceanCanvas.width; x += pixelSize) {
+  for (let x = 0; x < oceanCanvas.width; x += window.pixelSize) {
     let waveY = getJaggedWaveY(x);
 
     // Extended anti-aliasing zone for smoother transition
-    const antiAliasHeight = pixelSize * 4;
+    const antiAliasHeight = window.pixelSize * 4;
     const smoothStart = waveY - antiAliasHeight;
 
     // Draw from above the wave edge with smooth transition
@@ -554,7 +583,7 @@ function drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha) {
   let displayY = y + Math.sin(rippleOffset * 0.1) * rippleOffset * 0.5;
 
   // Dynamic pixel size with subtle variation
-  let dynamicPixelSize = pixelSize;
+  let dynamicPixelSize = window.pixelSize;
 
   if (hasRippleEffect) {
     // More dramatic size variation when ripples are present
