@@ -5,7 +5,8 @@ let axisY = 4, rectHeight = 0.6, verticalPadding = 0.2;
 let aboveOffsetPadding = 3, belowOffsetPadding = 8;
 
 // Global variables to share data count information with ocean generative
-window.currentDataCount = 0;
+window.currentDataCount1 = 0; // Person 1 data count
+window.currentDataCount2 = 0; // Person 2 data count
 window.minDataCount = 1;
 window.maxDataCount = 1;
 
@@ -252,6 +253,18 @@ function clearActiveAnimations() {
   labelTimers = [];
 }
 
+function clearPersonAnimations(personId) {
+  // Clear all label timers to prevent orphaned labels
+  labelTimers.forEach(timer => clearTimeout(timer));
+  labelTimers = [];
+
+  // Clear all animations to prevent orphaned animations
+  activeAnimations.forEach(anim => {
+    anim.selection().interrupt();
+  });
+  activeAnimations = [];
+}
+
 function goFullScreen() {
   const elem = document.documentElement;
   if (elem.requestFullscreen) {
@@ -264,7 +277,7 @@ function goFullScreen() {
 }
 
 
-function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.0) {
+function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.0, personId = 1) {
   const typeGroups = new Map();
   console.log("dataArray length:", dataArray);
 
@@ -297,7 +310,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
         const category = d.type1_cluster || "undefined";
         const fillColor = useSnowPattern ? "url(#snownoise-pattern)" : getCategoryColor(category);
 
-        // Draw rect with specified opacity
+        // Draw rect with specified opacity and person-specific class
         const rect = g.append("rect")
           .attr("x", x)
           .attr("y", y)
@@ -305,7 +318,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
           .attr("height", rectHeight)
           .attr("fill", fillColor)
           .attr("opacity", opacity)
-          .attr("class", `type-rect type-${type.replace(/\s+/g, '-')}`);
+          .attr("class", `type-rect type-${type.replace(/\s+/g, '-')} person-${personId}`);
 
         // Store rect reference before adding title
         typeRects.push(rect);
@@ -338,7 +351,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
       //   boxColor = brightenColor(boxColor, 25);
       // }
 
-      // Draw animated bounding box
+      // Draw animated bounding box with person-specific class
       const box = g.append("rect")
         .attr("x", minX)
         .attr("y", minY)
@@ -347,7 +360,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
         .attr("stroke", boxColor)
         .attr("stroke-width", 1.2)
         .attr("fill", "none")
-        .attr("class", "type-bound");
+        .attr("class", `type-bound person-${personId}`);
 
       const length = 2 * ((maxX - minX) + (maxY - minY));
       const DRAW_DURATION = 1000;
@@ -409,20 +422,21 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
         // Get category color
         const categoryColor = useSnowPattern ? "#FFFC00" : getCategoryColor(type);
 
-        // Draw colored square indicator - touching bar
+        // Draw colored square indicator - touching bar with person-specific class
         g.append("rect")
           .attr("x", targetX)
           .attr("y", labelY)
           .attr("width", 4)
           .attr("height", 4)
           .attr("fill", categoryColor)
+          .attr("class", `person-${personId}`)
           .style("opacity", 0)
           .transition()
           .delay(1000)
           .duration(400)
           .style("opacity", opacity);
 
-        // Add label text - vertically centered on the square
+        // Add label text - vertically centered on the square with person-specific class
         g.append("text")
           .attr("x", targetX + 5)
           .attr("y", labelY + 2)
@@ -430,6 +444,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
           .attr("font-size", "9px")
           .attr("text-anchor", "start")
           .attr("dominant-baseline", "central")
+          .attr("class", `person-${personId}`)
           .style("opacity", 0)
           .text(`${type} (${recordCount})`)
           .transition()
@@ -441,13 +456,20 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
     });
 }
 
-function updateVisibleData(noseX) {
+function updateVisibleData(noseX, personId = 1) {
   if (!xScale || !g || !startDate || !endDate) return;
 
-  clearActiveAnimations();
-  g.selectAll("*").remove();
+  // Clear animations and elements for the specific person
+  clearPersonAnimations(personId);
+
+  if (personId === 1) {
+    g.selectAll(".person-1").remove();
+  } else if (personId === 2) {
+    g.selectAll(".person-2").remove();
+  }
 
 
+  // Calculate time window based on the specific person's position
   let from = startDate, to = endDate;
   let centerTimeRaw = null;
   if (noseX !== null && noseX !== undefined) {
@@ -469,29 +491,35 @@ function updateVisibleData(noseX) {
     }
   }
 
-  const xAxis = d3.axisBottom(xScale)
-    .ticks(d3.timeMonth.every(1))
-    .tickFormat(d3.timeFormat("%b %Y"));
+  // Only draw x-axis once (for person 1) to avoid duplication
+  if (personId === 1) {
+    // Always remove and redraw x-axis to ensure clean state
+    g.selectAll(".x-axis").remove();
 
-  const xAxisG = g.append("g")
-    .attr("class", "x-axis")
-    .attr("transform", `translate(0,${axisY})`)
-    .call(xAxis);
+    const xAxis = d3.axisBottom(xScale)
+      .ticks(d3.timeMonth.every(1))
+      .tickFormat(d3.timeFormat("%b %Y"));
+
+    const xAxisG = g.append("g")
+      .attr("class", "x-axis")
+      .attr("transform", `translate(0,${axisY})`)
+      .call(xAxis);
+
+    xAxisG.selectAll(".tick text")
+      .style("font-size", "11px")
+      .attr("transform", "rotate(-45)")
+      .style("text-anchor", "end")
+      .style("fill", "#FFF")
+      .filter(function (d) {
+        return d >= from && d <= to;
+      })
+      .style("fill", "#FFF")
+      .style("font-weight", "700")
+      .style("font-size", "12px");
+  }
 
 
-  xAxisG.selectAll(".tick text")
-    .style("font-size", "11px")
-    .attr("transform", "rotate(-45)")
-    .style("text-anchor", "end")
-    .style("fill", "#FFF")
-    .filter(function (d) {
-      return d >= from && d <= to;
-    })
-    .style("fill", "#FFF")
-    .style("font-weight", "700")
-    .style("font-size", "12px");
-
-
+  // Filter data based on this person's specific time window
   const visibleWith = withLocation
     .filter(d => d.monthObj >= from && d.monthObj <= to)
     .sort((a, b) => a.monthObj - b.monthObj || (a.type1_cluster || "").localeCompare(b.type1_cluster || ""));
@@ -509,19 +537,41 @@ function updateVisibleData(noseX) {
     // Count ONLY withoutLocation items at the center month (top bar only)
     const itemsAtCenter = withoutLocation.filter(d => +d.monthObj === centerMonthTime).length;
 
-    window.currentDataCount = itemsAtCenter;
-    console.log(`Center date data count (top bar only): ${itemsAtCenter} at month ${centerMonth.toISOString()}`);
+    // Store data count per person
+    if (personId === 1) {
+      window.currentDataCount1 = itemsAtCenter;
+    } else if (personId === 2) {
+      window.currentDataCount2 = itemsAtCenter;
+    }
+
+    console.log(`Person ${personId} - Center date data count (top bar only): ${itemsAtCenter} at month ${centerMonth.toISOString()}`);
   } else {
     // If no specific position, use total count in visible range (top bar only)
-    window.currentDataCount = visibleWithout.length;
-    console.log(`Full range data count (top bar only): ${window.currentDataCount}`);
+    const totalCount = visibleWithout.length;
+    if (personId === 1) {
+      window.currentDataCount1 = totalCount;
+    } else if (personId === 2) {
+      window.currentDataCount2 = totalCount;
+    }
+    console.log(`Person ${personId} - Full range data count (top bar only): ${totalCount}`);
   }
 
 
   const ABOVE_PADDING = 30;
-  const BELOW_PADDING = 30;
-  const aboveOffsetMap = {};
-  const belowOffsetMap = {};
+  const BELOW_PADDING = 50;
+
+  // Create fresh offset maps for each person to avoid interference
+  // Reset offset maps on each movement to prevent stacking issues
+  let aboveOffsetMap, belowOffsetMap;
+  if (personId === 1) {
+    // Person 1 uses fresh offset maps each time
+    aboveOffsetMap = {};
+    belowOffsetMap = {};
+  } else {
+    // Person 2 uses fresh offset maps each time
+    aboveOffsetMap = {};
+    belowOffsetMap = {};
+  }
 
   function getOffset(monthObj, map) {
     const key = +monthObj;
@@ -530,18 +580,22 @@ function updateVisibleData(noseX) {
   }
 
 
+  // Draw bars for this specific person with person-specific classes
+
   drawClusterRects(
     visibleWith,
-    d => axisY - 35 - ABOVE_PADDING - (getOffset(d.monthObj, aboveOffsetMap) + 1) * (rectHeight + verticalPadding),
+    d => axisY - 5 - ABOVE_PADDING - (getOffset(d.monthObj, aboveOffsetMap) + 1) * (rectHeight + verticalPadding),
     false,  // Use category colors
-    1.0     // Full opacity for top bar
+    1.0,    // Full opacity for top bar
+    personId
   );
 
   drawClusterRects(
     visibleWithout,
-    d => axisY + 30 + BELOW_PADDING + getOffset(d.monthObj, belowOffsetMap) * (rectHeight + verticalPadding),
+    d => axisY + 5 + BELOW_PADDING + getOffset(d.monthObj, belowOffsetMap) * (rectHeight + verticalPadding),
     false,  // Use category colors like upper bar
-    .4    // Semi-transparent for bottom bar
+    .4,     // Semi-transparent for bottom bar
+    personId
   );
 }
 
