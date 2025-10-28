@@ -514,14 +514,14 @@ function drawSkyArea() {
 function drawOceanBackground() {
   // Draw gradient background under the wave to hide the light sky gradient
   const xAxisY = getXAxisPosition();
-  const backgroundStartY = xAxisY - 190; // Slightly lower than original -200, but not too low
+  const backgroundStartY = xAxisY - 190; // Start higher to better cover the wave area
   const backgroundHeight = oceanCanvas.height - backgroundStartY; // Extend to full canvas height
 
-  // Create the specified gradient
+  // Create the specified gradient - make it solid, not transparent
   const gradient = ctx.createLinearGradient(0, backgroundStartY, 0, backgroundStartY + backgroundHeight);
-  gradient.addColorStop(0, '#121FDA'); // 2.19% - bright blue
-  gradient.addColorStop(0.463, '#09003E'); // 46.3% - dark purple
-  gradient.addColorStop(0.848, 'rgba(9, 0, 62, 0.00)'); // 84.8% - transparent
+  gradient.addColorStop(0, '#121FDA'); // Start with bright blue
+  gradient.addColorStop(0.5, '#09003E'); // Middle dark purple
+  gradient.addColorStop(1, '#09003E'); // End with dark purple (solid, not transparent)
 
   ctx.fillStyle = gradient;
   ctx.fillRect(0, backgroundStartY, oceanCanvas.width, backgroundHeight);
