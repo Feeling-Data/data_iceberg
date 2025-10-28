@@ -6,7 +6,7 @@ const SMOOTHING_WINDOW = 10;
 const videoWidth = 200;
 const videoHeight = 150;
 
-// store the last position nose 
+// store the last position nose
 let lastProcessedNoseX = null;
 let lastProcessedNoseY = null;
 

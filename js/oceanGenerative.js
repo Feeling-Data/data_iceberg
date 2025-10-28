@@ -14,10 +14,10 @@ window.staticShiftAmount = 0.25; // How much static varies - SUBTLE (try 0.05 to
 
 // RIPPLE CONTROLS - Customize how ripples appear and behave
 window.rippleRingCount = 10; // Number of concentric rings (try 5 to 20)
-window.rippleRingSpacing = 80; // Distance between rings in pixels (try 40 to 150)
-window.rippleRingThickness = 40; // How thick each ring band is (try 20 to 80)
-window.rippleWaveIntensity = 15; // How much ripples distort pixels (try 15 to 60)
-window.rippleWaveFrequency = 0.15; // How wavy the rings are (try 0.05 to 0.3)
+window.rippleRingSpacing = 55; // Distance between rings in pixels (try 40 to 150)
+window.rippleRingThickness = 20; // How thick each ring band is (try 20 to 80)
+window.rippleWaveIntensity = 25; // How much ripples distort pixels (try 15 to 60)
+window.rippleWaveFrequency = 0.25; // How wavy the rings are (try 0.05 to 0.3)
 window.rippleExpansionSpeed = 8; // How fast ripples expand (try 3 to 15)
 window.rippleStrengthFalloff = 0.08; // How quickly rings fade with distance (try 0.03 to 0.15)
 
