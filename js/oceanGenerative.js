@@ -255,7 +255,7 @@ function createRippleAtCurrentPosition(personId = 1) {
   }
 
   // Position ripple at the top of the wave (fixed Y position)
-  const waveTopY = xAxisY - 20; // Fixed distance above x-axis
+  const waveTopY = xAxisY + 50; // Fixed distance above x-axis
 
   // Store position for pulsing based on person
   if (personId === 1) {

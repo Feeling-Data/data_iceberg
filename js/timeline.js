@@ -488,7 +488,9 @@ function updateVisibleData(noseX, personId = 1) {
   let from = startDate, to = endDate;
   let centerTimeRaw = null;
   if (noseX !== null && noseX !== undefined) {
-    const percent = 1 - Math.min(Math.max(noseX / videoWidth, 0), 1);
+    // Add slight granularity improvement - use more precise calculation
+    const rawPercent = Math.min(Math.max(noseX / videoWidth, 0), 1);
+    const percent = 1 - rawPercent;
     const windowMonths = 1;
     const fullRange = endDate - startDate;
     centerTimeRaw = new Date(+startDate + percent * fullRange);

@@ -16,7 +16,7 @@ let framesWithoutNose2 = 0;
 const SMOOTHING_WINDOW = 10;
 const videoWidth = 200;
 const videoHeight = 150;
-const NOSE_MOVE_THRESHOLD = 5;
+const NOSE_MOVE_THRESHOLD = 3;
 const MAX_MISSING_FRAMES = 5;
 
 
