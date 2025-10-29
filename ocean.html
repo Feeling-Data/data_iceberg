@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ocean Generative - Static Pixelated Gradients</title>
+
+    <!-- p5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.2/p5.min.js"></script>
+
+    <!-- Neue Haas Grotesk Display Pro Font -->
+    <link href="https://fonts.cdnfonts.com/css/neue-haas-grotesk-display-pro" rel="stylesheet">
+
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #000;
+        color: #fff;
+        font-family: 'Neue Haas Grotesk Display Pro', sans-serif;
+        overflow: hidden;
+      }
+
+      #controls {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 15px;
+        border-radius: 8px;
+        backdrop-filter: blur(10px);
+      }
+
+      #controls h3 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      #controls p {
+        margin: 5px 0;
+        font-size: 12px;
+        opacity: 0.8;
+      }
+
+      .slider-container {
+        margin: 15px 0 5px 0;
+      }
+
+      .slider-container label {
+        display: block;
+        font-size: 12px;
+        margin-bottom: 5px;
+        opacity: 0.9;
+      }
+
+      .slider-container input[type="range"] {
+        width: 100%;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.2);
+        outline: none;
+        appearance: none;
+        -webkit-appearance: none;
+      }
+
+      .slider-container input[type="range"]::-webkit-slider-thumb {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: white;
+        cursor: pointer;
+      }
+
+      .slider-container input[type="range"]::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: white;
+        cursor: pointer;
+        border: none;
+      }
+
+      .slider-value {
+        display: inline-block;
+        margin-left: 5px;
+        font-size: 11px;
+        opacity: 0.7;
+      }
+
+      #fullscreen-btn {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 10px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-family: 'Neue Haas Grotesk Display Pro', sans-serif;
+        font-size: 12px;
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+      }
+
+      #fullscreen-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.5);
+      }
+
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="controls">
+      <h3>Ocean Generative</h3>
+      <p>Click to create ripples</p>
+      <p>SPACE: Regenerate</p>
+      <p>S: Save image</p>
+
+      <div class="slider-container">
+        <label>
+          Pixel Size <span class="slider-value" id="pixel-size-value">12</span>
+        </label>
+        <input type="range" id="pixel-size-slider" min="4" max="24" value="12" step="1">
+      </div>
+    </div>
+
+    <button id="fullscreen-btn" onclick="goFullScreen()">Fullscreen</button>
+
+    <script src="js/oceanGenerative.js"></script>
+
+    <script>
+      // Pixel size slider control
+      const pixelSizeSlider = document.getElementById('pixel-size-slider');
+      const pixelSizeValue = document.getElementById('pixel-size-value');
+
+      pixelSizeSlider.addEventListener('input', (e) => {
+        const value = e.target.value;
+        pixelSizeValue.textContent = value;
+        // Update the global pixelSize variable from oceanGenerative.js
+        window.pixelSize = parseInt(value);
+      });
+
+      function goFullScreen() {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+          elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+          elem.msRequestFullscreen();
+        }
+      }
+
+      // Handle fullscreen change
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+      function handleFullscreenChange() {
+        if (window.oceanCanvas) {
+          setTimeout(() => {
+            windowResized();
+          }, 100);
+        }
+      }
+    </script>
+  </body>
+
+</html>
