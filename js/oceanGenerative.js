@@ -4,6 +4,7 @@ let time = 0;
 let waveOffset = 0;
 let oceanCanvas;
 let ctx;
+let gridCtx1 = null, gridCtx2 = null, gridCtx3 = null;
 
 // EXPERIMENTAL: Ocean morphing controls - adjust these to see different effects!
 window.morphSpeed = 3; // How fast patterns shift (try 0.5 to 3.0)
@@ -63,7 +64,8 @@ class Ripple {
     const maxDataCount = window.maxDataCount || 1000;
 
     // Make the base radius and scale range more balanced for bottom bar data only
-    const baseMaxRadius = window.innerWidth * 0.3; // Medium base
+    const baseCanvasWidth = (typeof oceanCanvas !== 'undefined' && oceanCanvas && oceanCanvas.width) ? oceanCanvas.width : window.innerWidth;
+    const baseMaxRadius = baseCanvasWidth * 0.3; // Medium base (tie to 5760 width when available)
     const minScale = .5; // Minimum 50% of base - visible ripples for small data
     const maxScale = 5; // Maximum 500% of base - large but not overwhelming ripples
 
@@ -176,23 +178,27 @@ function initOceanGenerative() {
     return;
   }
 
-  // Use high resolution for crisp pixels
-  const containerWidth = window.innerWidth;
-  const containerHeight = window.innerHeight;
+  // Cache grid canvases (if present)
+  const g1 = document.getElementById('grid-canvas-1');
+  const g2 = document.getElementById('grid-canvas-2');
+  const g3 = document.getElementById('grid-canvas-3');
+  gridCtx1 = g1 ? g1.getContext('2d') : null;
+  gridCtx2 = g2 ? g2.getContext('2d') : null;
+  gridCtx3 = g3 ? g3.getContext('2d') : null;
 
-  // Create canvas with high resolution
+  // Create a FIXED virtual render buffer (5760x1080)
   oceanCanvas = document.createElement('canvas');
-  oceanCanvas.width = containerWidth;
-  oceanCanvas.height = containerHeight;
+  oceanCanvas.width = 5760;
+  oceanCanvas.height = 1080;
   oceanCanvas.id = 'ocean-canvas';
   oceanCanvas.style.display = 'block';
-  oceanCanvas.style.width = '100%';
-  oceanCanvas.style.height = '100%';
   oceanCanvas.style.position = 'absolute';
   oceanCanvas.style.top = '0';
   oceanCanvas.style.left = '0';
   oceanCanvas.style.zIndex = '1';
   oceanCanvas.style.imageRendering = 'pixelated'; // Maintain crisp pixels
+  oceanCanvas.style.width = '5760px'; // Prevent CSS stretching
+  oceanCanvas.style.height = '1080px';
 
   // Add to container
   container.appendChild(oceanCanvas);
@@ -200,7 +206,7 @@ function initOceanGenerative() {
   // Get context
   ctx = oceanCanvas.getContext('2d');
 
-  console.log("Canvas created with high resolution:", oceanCanvas.width, oceanCanvas.height);
+  console.log("Canvas created with FIXED resolution:", oceanCanvas.width, oceanCanvas.height);
 
   // Add scroll listener to ensure wave updates on scroll
   window.addEventListener('scroll', () => {
@@ -219,40 +225,12 @@ function createRippleAtCurrentPosition(personId = 1) {
 
   if (currentTimelinePosition === null) return; // No position data for this person
 
-  // Map nose position to canvas coordinates to match timeline position exactly
-  const nosePercent = currentTimelinePosition / videoWidth; // 0 to 1
-
-  // Get the actual timeline element to calculate precise position
-  const timeline = document.getElementById('timeline');
-  const scrollContainer = document.getElementById('scroll-container');
-  let rippleX, rippleY;
-
-  if (timeline) {
-    // Get the timeline <g> element which contains the actual data
-    const timelineG = timeline.querySelector('g');
-
-    if (timelineG) {
-      // Get the bounding rect of the <g> element (the actual data container)
-      const gRect = timelineG.getBoundingClientRect();
-
-      // Calculate the position within the full timeline width
-      const invertedNosePercent = 1 - nosePercent;
-      const positionInTimeline = invertedNosePercent * gRect.width;
-
-      // Add the left offset of the <g> element
-      rippleX = gRect.left + positionInTimeline;
-    } else {
-      // Fallback to SVG center
-      const timelineRect = timeline.getBoundingClientRect();
-      rippleX = timelineRect.left + (timelineRect.width / 2);
-    }
-
-    rippleY = xAxisY; // At the x-axis level
-  } else {
-    // Fallback to canvas-based mapping
-    rippleX = oceanCanvas.width / 2;
-    rippleY = xAxisY;
-  }
+  // Map nose position to VIRTUAL CANVAS coordinates along the full 5760px width
+  // noseX ranges 0..videoWidth, percent inverted to match existing timeline logic
+  const rawPercent = Math.min(Math.max(currentTimelinePosition / videoWidth, 0), 1);
+  const invertedPercent = 1 - rawPercent;
+  const rippleX = invertedPercent * oceanCanvas.width; // 0..5760 space
+  const rippleY = xAxisY; // At the x-axis level
 
   // Position ripple at the top of the wave (fixed Y position)
   const waveTopY = xAxisY + 50; // Fixed distance above x-axis
@@ -287,7 +265,8 @@ function calculatePulseInterval(dataCount) {
   const minDataCount = window.minDataCount || 1;
   const maxDataCount = window.maxDataCount || 1000;
 
-  const baseMaxRadius = window.innerWidth * 0.3;
+  const baseCanvasWidth = (typeof oceanCanvas !== 'undefined' && oceanCanvas && oceanCanvas.width) ? oceanCanvas.width : window.innerWidth;
+  const baseMaxRadius = baseCanvasWidth * 0.3;
   const minScale = .5;
   const maxScale = 5;
 
@@ -546,34 +525,33 @@ function animate(currentTime) {
   // Draw pixelated noise texture (only below wave)
   drawPixelatedNoise();
 
+  // If grid mode, mirror thirds into the three grid canvases
+  if (document.body.classList.contains('grid-mode') && gridCtx1 && gridCtx2 && gridCtx3) {
+    const sw = Math.floor(oceanCanvas.width / 3);
+    const sh = oceanCanvas.height;
+    // Left third -> canvas 1
+    gridCtx1.clearRect(0, 0, 1920, 1080);
+    gridCtx1.drawImage(oceanCanvas, 0, 0, sw, sh, 0, 0, 1920, 1080);
+    // Middle third -> canvas 2
+    gridCtx2.clearRect(0, 0, 1920, 1080);
+    gridCtx2.drawImage(oceanCanvas, sw, 0, sw, sh, 0, 0, 1920, 1080);
+    // Right third -> canvas 3
+    gridCtx3.clearRect(0, 0, 1920, 1080);
+    gridCtx3.drawImage(oceanCanvas, sw * 2, 0, sw, sh, 0, 0, 1920, 1080);
+  }
+
   time += 0.01;
   waveOffset += 0.02;
   requestAnimationFrame(animate);
 }
 
 function getXAxisPosition() {
-  // Get the timeline element and calculate x-axis position
-  const timeline = document.getElementById('timeline');
-  if (!timeline) {
-    // Fallback: position wave at a reasonable height before timeline loads
-    return oceanCanvas.height * 0.4; // 40% down the viewport
-  }
-
-  const timelineRect = timeline.getBoundingClientRect();
-
-  // Check if timeline is visible and has proper dimensions
-  if (timelineRect.height === 0 || timelineRect.width === 0) {
-    return oceanCanvas.height * 0.4; // Fallback if timeline not rendered
-  }
-
-  // Calculate x-axis position relative to the timeline
-  const xAxisY = timelineRect.top + (timelineRect.height * 0.6); // Adjusted to be closer to actual x-axis
-
-  // Ensure the wave doesn't go below the bottom of the viewport
-  const maxY = oceanCanvas.height - 100; // Leave 100px buffer at bottom
-  const minY = oceanCanvas.height * 0.2; // Don't go above 20% of viewport
-
-  return Math.max(minY, Math.min(maxY, xAxisY));
+  // Use a fixed proportion of the fixed-height canvas (5760x1080)
+  if (!oceanCanvas) return 648; // fallback ~60% of 1080
+  const desired = oceanCanvas.height * 0.6; // place wave near upper area
+  const maxY = oceanCanvas.height - 100;
+  const minY = oceanCanvas.height * 0.2;
+  return Math.max(minY, Math.min(maxY, desired));
 }
 
 function getJaggedWaveY(x) {

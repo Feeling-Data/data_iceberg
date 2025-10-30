@@ -128,6 +128,20 @@ setInterval(updateSnowNoise, 100); // dynamic noise
 
 
 console.log("Starting data fetch...");
+function mirrorTimelineToGrid() {
+  const src = document.getElementById('timeline');
+  if (!src) return;
+  const html = src.innerHTML; // includes defs, axis, bars, etc.
+  const s1 = document.getElementById('grid-svg-1');
+  const s2 = document.getElementById('grid-svg-2');
+  const s3 = document.getElementById('grid-svg-3');
+  if (s1) { s1.setAttribute('width', '1920'); s1.setAttribute('height', '1080'); s1.innerHTML = `<g transform="translate(${-0},0)">${html}</g>`; }
+  if (s2) { s2.setAttribute('width', '1920'); s2.setAttribute('height', '1080'); s2.innerHTML = `<g transform="translate(${-1920},0)">${html}</g>`; }
+  if (s3) { s3.setAttribute('width', '1920'); s3.setAttribute('height', '1080'); s3.innerHTML = `<g transform="translate(${-3840},0)">${html}</g>`; }
+}
+// Expose for external calls (e.g., grid toggle)
+window.mirrorTimelineToGrid = mirrorTimelineToGrid;
+
 fetch("data.json")
   .then(res => {
     console.log("Data fetch response:", res);
@@ -250,6 +264,9 @@ fetch("data.json")
     console.log("X-axis group created:", xAxisGroup);
     console.log("SVG after x-axis:", svg.node().innerHTML);
     console.log("SVG children count:", svg.node().children.length);
+
+    // After initial render, mirror to grid svgs
+    mirrorTimelineToGrid();
 
   });
 
@@ -614,5 +631,10 @@ function updateVisibleData(noseX, personId = 1) {
     .4,     // Semi-transparent for bottom bar
     personId
   );
+
+  // At the end of updates, if grid is visible, refresh mirrors
+  if (document.body && document.body.classList && document.body.classList.contains('grid-mode')) {
+    mirrorTimelineToGrid();
+  }
 }
 
