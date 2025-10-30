@@ -59,27 +59,27 @@ class Ripple {
     this.personId = personId;
 
     // Scale maxRadius based on data count relative to min/max in dataset
-    // Use the actual min and max from the data for dynamic scaling
     const minDataCount = window.minDataCount || 1;
-    const maxDataCount = window.maxDataCount || 1000;
+    const maxDataCount = window.maxDataCount || 1;
 
-    // Make the base radius and scale range more balanced for bottom bar data only
-    const baseCanvasWidth = (typeof oceanCanvas !== 'undefined' && oceanCanvas && oceanCanvas.width) ? oceanCanvas.width : window.innerWidth;
-    const baseMaxRadius = baseCanvasWidth * 0.3; // Medium base (tie to 5760 width when available)
-    const minScale = .5; // Minimum 50% of base - visible ripples for small data
-    const maxScale = 5; // Maximum 500% of base - large but not overwhelming ripples
+    // Base radius should depend on canvas HEIGHT (so it doesn't explode with 5760 width)
+    const baseCanvasHeight = (typeof oceanCanvas !== 'undefined' && oceanCanvas && oceanCanvas.height) ? oceanCanvas.height : 1080;
+    const baseMaxRadius = baseCanvasHeight * 0.45; // tuned for 1080 height
+    const minScale = .5; // Minimum 50% of base
+    const maxScale = 5;  // Up to 500% of base for very large months
 
-    // Normalize data count to 0-1 range based on actual min/max
+    // Normalize data count safely
     let normalizedCount;
-    if (maxDataCount === minDataCount) {
-      normalizedCount = 0.5; // If all dates have same count, use middle scale
+    const range = maxDataCount - minDataCount;
+    if (range > 0) {
+      normalizedCount = (dataCount - minDataCount) / range;
     } else {
-      normalizedCount = (dataCount - minDataCount) / (maxDataCount - minDataCount);
+      normalizedCount = maxDataCount > 1 ? (dataCount / maxDataCount) : 0; // fallback
     }
+    normalizedCount = Math.max(0, Math.min(1, normalizedCount));
 
-    // Apply strong exponential scaling for EXTREME differences at the low end
-    // This makes small data BARELY visible and large data HUGE
-    normalizedCount = Math.pow(normalizedCount, 2.0); // Stronger exponential curve
+    // Preserve stronger differences at the top end
+    normalizedCount = Math.pow(normalizedCount, 2.0);
 
     const radiusScale = minScale + (normalizedCount * (maxScale - minScale));
     this.maxRadius = baseMaxRadius * radiusScale;
@@ -92,16 +92,15 @@ class Ripple {
     const framesToReachMax = this.maxRadius / this.speed;
 
     // Scale fadeSpeed so ripple lives long enough to reach its maxRadius
-    // Add more buffer for smaller ripples so they stay longer
-    const lifeBuffer = 1.3 + (1 - normalizedCount) * 0.5; // More buffer for low data (up to 1.8x)
+    const lifeBuffer = 1.3 + (1 - normalizedCount) * 0.5; // More buffer for low data
     this.fadeSpeed = this.life / (framesToReachMax * lifeBuffer);
 
     this.dissipationRate = 0.001; // How much strength decreases over time
 
-    // console.log(`RIPPLE CREATED (Person ${personId}) maxRadius:${this.maxRadius.toFixed(0)}`);
-    this.delay = delay; // Delay before ripple becomes active
-    this.active = false; // Whether ripple is active yet
-    this.age = 0; // Age of the ripple
+    // this.delay, this.active, this.age
+    this.delay = delay;
+    this.active = false;
+    this.age = 0;
   }
 
   update() {
@@ -261,21 +260,22 @@ function createRippleAtCurrentPosition(personId = 1) {
 function calculatePulseInterval(dataCount) {
   // Calculate ripple lifetime based on same logic as Ripple constructor
   const minDataCount = window.minDataCount || 1;
-  const maxDataCount = window.maxDataCount || 1000;
+  const maxDataCount = window.maxDataCount || 1;
 
-  const baseCanvasWidth = (typeof oceanCanvas !== 'undefined' && oceanCanvas && oceanCanvas.width) ? oceanCanvas.width : window.innerWidth;
-  const baseMaxRadius = baseCanvasWidth * 0.3;
+  const baseCanvasHeight = (typeof oceanCanvas !== 'undefined' && oceanCanvas && oceanCanvas.height) ? oceanCanvas.height : 1080;
+  const baseMaxRadius = baseCanvasHeight * 0.45;
   const minScale = .5;
   const maxScale = 5;
 
   // Normalize and apply exponential curve (same as Ripple constructor)
   let normalizedCount;
-  if (maxDataCount === minDataCount) {
-    normalizedCount = 0.5;
+  const range = maxDataCount - minDataCount;
+  if (range > 0) {
+    normalizedCount = (dataCount - minDataCount) / range;
   } else {
-    normalizedCount = (dataCount - minDataCount) / (maxDataCount - minDataCount);
+    normalizedCount = maxDataCount > 1 ? (dataCount / maxDataCount) : 0;
   }
-  normalizedCount = Math.pow(normalizedCount, 2.0);
+  normalizedCount = Math.max(0, Math.min(1, Math.pow(normalizedCount, 2.0)));
 
   const radiusScale = minScale + (normalizedCount * (maxScale - minScale));
   const maxRadius = baseMaxRadius * radiusScale;
@@ -288,14 +288,12 @@ function calculatePulseInterval(dataCount) {
   // Total frames in ripple lifetime
   const totalFrames = framesToReachMax * lifeBuffer;
 
-  // Convert to milliseconds at 20fps
+  // Convert to milliseconds at 20fps (maintaining old assumption)
   const fps = 20;
   const rippleLifetimeMs = (totalFrames / fps) * 1000;
 
   // Add 20% buffer so new ripple starts slightly after previous one fades
   const pulseInterval = rippleLifetimeMs * 1.2;
-
-  // console.log(`Calculated pulse interval: ${pulseInterval.toFixed(0)}ms for dataCount ${dataCount} (ripple lifetime: ${rippleLifetimeMs.toFixed(0)}ms)`);
 
   return pulseInterval;
 }

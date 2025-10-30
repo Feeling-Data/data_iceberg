@@ -183,7 +183,7 @@ function observeTimelineForMirrors() {
   timelineObserver = new MutationObserver(() => {
     scheduleMirrorTimelineToGrid();
   });
-  timelineObserver.observe(src, { childList: true, subtree: true, attributes: true, attributeFilter: ['transform','style','opacity','x','y','width','height'] });
+  timelineObserver.observe(src, { childList: true, subtree: true, attributes: true, attributeFilter: ['transform', 'style', 'opacity', 'x', 'y', 'width', 'height'] });
 }
 
 fetch("data.json")
@@ -262,6 +262,9 @@ fetch("data.json")
     // Group data by month for counting
     const withLocationByMonth = d3.rollup(withLocation, v => v.length, d => +d.monthObj);
     const withoutLocationByMonth = d3.rollup(withoutLocation, v => v.length, d => +d.monthObj);
+
+    // Expose monthly counts globally for ripple sizing
+    window.withoutLocationByMonthCounts = Object.fromEntries(Array.from(withoutLocationByMonth.entries()));
 
     const maxAbove = d3.max(withLocationByMonth.values());
     const maxBelow = d3.max(withoutLocationByMonth.values());
@@ -615,7 +618,7 @@ function updateVisibleData(noseX, personId = 1) {
     const centerMonthTime = +centerMonth;
 
     // Count ONLY withoutLocation items at the center month (top bar only)
-    const itemsAtCenter = withoutLocation.filter(d => +d.monthObj === centerMonthTime).length;
+    const itemsAtCenter = (window.withoutLocationByMonthCounts && window.withoutLocationByMonthCounts[centerMonthTime]) ? window.withoutLocationByMonthCounts[centerMonthTime] : 0;
 
     // Store data count per person
     if (personId === 1) {
