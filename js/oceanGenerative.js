@@ -48,7 +48,7 @@ const SETTLE_DELAY = 400; // Wait 400ms before considering "settled"
 
 // Performance optimization
 let lastFrameTime = 0;
-const targetFPS = 20; // Reduce to 20fps for better performance
+const targetFPS = 30; // smoother animation
 const frameInterval = 1000 / targetFPS;
 
 class Ripple {
@@ -98,13 +98,7 @@ class Ripple {
 
     this.dissipationRate = 0.001; // How much strength decreases over time
 
-    console.log(`🌊 RIPPLE CREATED (Person ${personId}):
-      dataCount: ${dataCount}
-      min/max range: [${minDataCount}, ${maxDataCount}]
-      normalized: ${normalizedCount.toFixed(3)} (0=min, 1=max)
-      maxRadius: ${this.maxRadius.toFixed(0)}px
-      framesToReachMax: ${framesToReachMax.toFixed(0)}
-      fadeSpeed: ${this.fadeSpeed.toFixed(4)} (faster = shorter life)`);
+    // console.log(`RIPPLE CREATED (Person ${personId}) maxRadius:${this.maxRadius.toFixed(0)}`);
     this.delay = delay; // Delay before ripple becomes active
     this.active = false; // Whether ripple is active yet
     this.age = 0; // Age of the ripple
@@ -182,9 +176,12 @@ function initOceanGenerative() {
   const g1 = document.getElementById('grid-canvas-1');
   const g2 = document.getElementById('grid-canvas-2');
   const g3 = document.getElementById('grid-canvas-3');
-  gridCtx1 = g1 ? g1.getContext('2d') : null;
-  gridCtx2 = g2 ? g2.getContext('2d') : null;
-  gridCtx3 = g3 ? g3.getContext('2d') : null;
+  gridCtx1 = g1 ? g1.getContext('2d', { alpha: true }) : null;
+  gridCtx2 = g2 ? g2.getContext('2d', { alpha: true }) : null;
+  gridCtx3 = g3 ? g3.getContext('2d', { alpha: true }) : null;
+  if (gridCtx1) gridCtx1.imageSmoothingEnabled = false;
+  if (gridCtx2) gridCtx2.imageSmoothingEnabled = false;
+  if (gridCtx3) gridCtx3.imageSmoothingEnabled = false;
 
   // Create a FIXED virtual render buffer (5760x1080)
   oceanCanvas = document.createElement('canvas');
@@ -204,7 +201,8 @@ function initOceanGenerative() {
   container.appendChild(oceanCanvas);
 
   // Get context
-  ctx = oceanCanvas.getContext('2d');
+  ctx = oceanCanvas.getContext('2d', { alpha: true });
+  ctx.imageSmoothingEnabled = false;
 
   console.log("Canvas created with FIXED resolution:", oceanCanvas.width, oceanCanvas.height);
 
@@ -257,7 +255,7 @@ function createRippleAtCurrentPosition(personId = 1) {
   // Create single ripple at the top of the wave with data count and person ID
   ripples.push(new Ripple(rippleX, waveTopY, 0, dataCount, personId));
 
-  console.log(`Timeline ripple created for Person ${personId} at:`, rippleX, waveTopY, "with dataCount:", dataCount);
+  // console.log(`Timeline ripple created for Person ${personId} at:`, rippleX, waveTopY, "with dataCount:", dataCount);
 }
 
 function calculatePulseInterval(dataCount) {
@@ -297,7 +295,7 @@ function calculatePulseInterval(dataCount) {
   // Add 20% buffer so new ripple starts slightly after previous one fades
   const pulseInterval = rippleLifetimeMs * 1.2;
 
-  console.log(`Calculated pulse interval: ${pulseInterval.toFixed(0)}ms for dataCount ${dataCount} (ripple lifetime: ${rippleLifetimeMs.toFixed(0)}ms)`);
+  // console.log(`Calculated pulse interval: ${pulseInterval.toFixed(0)}ms for dataCount ${dataCount} (ripple lifetime: ${rippleLifetimeMs.toFixed(0)}ms)`);
 
   return pulseInterval;
 }
@@ -325,7 +323,7 @@ function startPulsing(personId = 1) {
     currentPulseInterval2 = currentPulseInterval;
   }
 
-  console.log(`Person ${personId} settled - starting ripple pulse every ${currentPulseInterval.toFixed(0)}ms`);
+  // console.log(`Person ${personId} settled - starting ripple pulse every ${currentPulseInterval.toFixed(0)}ms`);
 
   // Create ripple on dynamic interval
   const interval = setInterval(() => {
@@ -337,7 +335,7 @@ function startPulsing(personId = 1) {
         (typeof window.currentDataCount1 !== 'undefined' ? window.currentDataCount1 : 1) :
         (typeof window.currentDataCount2 !== 'undefined' ? window.currentDataCount2 : 1);
       ripples.push(new Ripple(lastRippleX, lastRippleY, 0, dataCount, personId));
-      console.log(`Pulse ripple created for Person ${personId}`);
+      // console.log(`Pulse ripple created for Person ${personId}`);
     }
   }, currentPulseInterval);
 
@@ -354,7 +352,7 @@ function stopPulsing(personId = 1) {
       clearInterval(pulseInterval1);
       pulseInterval1 = null;
       isSettled1 = false;
-      console.log("Person 1 moved - stopping ripple pulse");
+      // console.log("Person 1 moved - stopping ripple pulse");
     }
     if (settledTimeout1) {
       clearTimeout(settledTimeout1);
@@ -365,7 +363,7 @@ function stopPulsing(personId = 1) {
       clearInterval(pulseInterval2);
       pulseInterval2 = null;
       isSettled2 = false;
-      console.log("Person 2 moved - stopping ripple pulse");
+      // console.log("Person 2 moved - stopping ripple pulse");
     }
     if (settledTimeout2) {
       clearTimeout(settledTimeout2);
@@ -437,7 +435,7 @@ function checkForNoseMovement() {
       if (distance > 20) {
         // Clear most existing ripples for dramatic position changes
         ripples = ripples.filter(ripple => ripple.strength > 0.5);
-        console.log("Cleared weak ripples due to large position change");
+        // console.log("Cleared weak ripples due to large position change");
       }
 
       // Map nose position from video coordinates to canvas coordinates
@@ -448,7 +446,7 @@ function checkForNoseMovement() {
       lastNoseX = noseX;
       lastNoseY = noseY;
 
-      console.log("Person 1 nose ripple created at:", rippleX, rippleY);
+      // console.log("Person 1 nose ripple created at:", rippleX, rippleY);
     }
   }
 
@@ -466,7 +464,7 @@ function checkForNoseMovement() {
       if (distance > 20) {
         // Clear most existing ripples for dramatic position changes
         ripples = ripples.filter(ripple => ripple.strength > 0.5);
-        console.log("Cleared weak ripples due to large position change");
+        // console.log("Cleared weak ripples due to large position change");
       }
 
       // Map nose position from video coordinates to canvas coordinates
@@ -477,7 +475,7 @@ function checkForNoseMovement() {
       lastNoseX2 = noseX2;
       lastNoseY2 = noseY2;
 
-      console.log("Person 2 nose ripple created at:", rippleX, rippleY);
+      // console.log("Person 2 nose ripple created at:", rippleX, rippleY);
     }
   }
 
@@ -527,7 +525,7 @@ function animate(currentTime) {
 
   // If grid mode, mirror thirds into the three grid canvases
   if (document.body.classList.contains('grid-mode') && gridCtx1 && gridCtx2 && gridCtx3) {
-    const sw = Math.floor(oceanCanvas.width / 3);
+    const sw = 1920; // each third
     const sh = oceanCanvas.height;
     // Left third -> canvas 1
     gridCtx1.clearRect(0, 0, 1920, 1080);

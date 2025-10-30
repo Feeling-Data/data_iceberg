@@ -135,12 +135,56 @@ function mirrorTimelineToGrid() {
   const s1 = document.getElementById('grid-svg-1');
   const s2 = document.getElementById('grid-svg-2');
   const s3 = document.getElementById('grid-svg-3');
-  if (s1) { s1.setAttribute('width', '1920'); s1.setAttribute('height', '1080'); s1.innerHTML = `<g transform="translate(${-0},0)">${html}</g>`; }
-  if (s2) { s2.setAttribute('width', '1920'); s2.setAttribute('height', '1080'); s2.innerHTML = `<g transform="translate(${-1920},0)">${html}</g>`; }
-  if (s3) { s3.setAttribute('width', '1920'); s3.setAttribute('height', '1080'); s3.innerHTML = `<g transform="translate(${-3840},0)">${html}</g>`; }
+  const apply = (el, offset) => {
+    if (!el) return;
+    el.setAttribute('width', '1920');
+    el.setAttribute('height', '1080');
+    el.setAttribute('viewBox', `${offset} 0 1920 1080`);
+    el.setAttribute('preserveAspectRatio', 'xMinYMin meet');
+    el.innerHTML = html; // no extra transforms; viewBox crops correctly
+  };
+  apply(s1, 0);
+  apply(s2, 1920);
+  apply(s3, 3840);
 }
 // Expose for external calls (e.g., grid toggle)
 window.mirrorTimelineToGrid = mirrorTimelineToGrid;
+
+let mirrorScheduled = false;
+let mirrorUntil = 0;
+function scheduleMirrorTimelineToGrid() {
+  if (!document.body.classList.contains('grid-mode')) return;
+  if (mirrorScheduled) return;
+  mirrorScheduled = true;
+  requestAnimationFrame(() => {
+    mirrorScheduled = false;
+    mirrorTimelineToGrid();
+  });
+}
+
+function pulseMirrorTimeline(ms = 1200) {
+  if (!document.body.classList.contains('grid-mode')) return;
+  const now = performance.now();
+  mirrorUntil = Math.max(mirrorUntil, now + ms);
+  const loop = () => {
+    if (!document.body.classList.contains('grid-mode')) return;
+    const t = performance.now();
+    mirrorTimelineToGrid();
+    if (t < mirrorUntil) requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+
+let timelineObserver = null;
+function observeTimelineForMirrors() {
+  const src = document.getElementById('timeline');
+  if (!src) return;
+  if (timelineObserver) { timelineObserver.disconnect(); timelineObserver = null; }
+  timelineObserver = new MutationObserver(() => {
+    scheduleMirrorTimelineToGrid();
+  });
+  timelineObserver.observe(src, { childList: true, subtree: true, attributes: true, attributeFilter: ['transform','style','opacity','x','y','width','height'] });
+}
 
 fetch("data.json")
   .then(res => {
@@ -265,8 +309,10 @@ fetch("data.json")
     console.log("SVG after x-axis:", svg.node().innerHTML);
     console.log("SVG children count:", svg.node().children.length);
 
-    // After initial render, mirror to grid svgs
-    mirrorTimelineToGrid();
+    // After initial render, mirror to grid svgs and pulse during initial animations
+    scheduleMirrorTimelineToGrid();
+    observeTimelineForMirrors();
+    pulseMirrorTimeline(1500);
 
   });
 
@@ -634,7 +680,9 @@ function updateVisibleData(noseX, personId = 1) {
 
   // At the end of updates, if grid is visible, refresh mirrors
   if (document.body && document.body.classList && document.body.classList.contains('grid-mode')) {
-    mirrorTimelineToGrid();
+    scheduleMirrorTimelineToGrid();
+    // Pulse mirrors while animations/labels draw
+    pulseMirrorTimeline(1500);
   }
 }
 
