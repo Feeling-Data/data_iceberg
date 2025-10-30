@@ -24,10 +24,12 @@ function setup() {
   createCanvas(videoWidth, videoHeight).position(window.innerWidth - videoWidth - 10, 600);
 
   // video = createCapture(VIDEO);
+  //7e1adb33be1753196de06ef109bb0425613b1f92423f34672925523f62fa27e1
 
+  //1296e2f23b12efafe20cb3e27134590a208fdbc3128cf4f86a60681c1a8e8a7a
   let constraints = {
     video: {
-      deviceId: "1296e2f23b12efafe20cb3e27134590a208fdbc3128cf4f86a60681c1a8e8a7a"
+      deviceId: "7e1adb33be1753196de06ef109bb0425613b1f92423f34672925523f62fa27e1"
     }
   };
 
@@ -36,7 +38,7 @@ function setup() {
   video.hide();
 
   poseNet = ml5.poseNet(video, () => {
-    console.log("PoseNet ready");
+    // PoseNet ready
     poseNet.on("pose", function (poses) {
       // Process Person 1 (first detected person)
       if (poses.length > 0) {

@@ -163,7 +163,7 @@ class Ripple {
 
 // Use vanilla JavaScript and HTML5 Canvas instead of p5.js
 function initOceanGenerative() {
-  console.log("Initializing ocean generative...");
+  // Initializing ocean generative...
 
   const container = document.getElementById('generative-container');
   if (!container) {
@@ -203,7 +203,7 @@ function initOceanGenerative() {
   ctx = oceanCanvas.getContext('2d', { alpha: true });
   ctx.imageSmoothingEnabled = false;
 
-  console.log("Canvas created with FIXED resolution:", oceanCanvas.width, oceanCanvas.height);
+  // Canvas created with FIXED resolution
 
   // Add scroll listener to ensure wave updates on scroll
   window.addEventListener('scroll', () => {

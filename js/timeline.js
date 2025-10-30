@@ -127,7 +127,6 @@ setInterval(updateSnowNoise, 100); // dynamic noise
 
 
 
-console.log("Starting data fetch...");
 function mirrorTimelineToGrid() {
   const src = document.getElementById('timeline');
   if (!src) return;
@@ -186,13 +185,12 @@ function observeTimelineForMirrors() {
   timelineObserver.observe(src, { childList: true, subtree: true, attributes: true, attributeFilter: ['transform', 'style', 'opacity', 'x', 'y', 'width', 'height'] });
 }
 
+// Startup
 fetch("data.json")
   .then(res => {
-    console.log("Data fetch response:", res);
     return res.json();
   })
   .then(data => {
-    console.log("Data loaded successfully, length:", data.length);
     const parseDate = d3.timeParse("%d/%m/%Y");
 
     const withDate = [];
@@ -235,7 +233,6 @@ fetch("data.json")
     const svgWidth = 5760;
 
     const svg = d3.select("#timeline").attr("width", svgWidth).attr("height", 1080);
-    console.log("SVG created with dimensions:", svg.attr("width"), "x", svg.attr("height"));
     const defs = svg.append("defs");
 
     // dynamic noise pattern
@@ -274,13 +271,6 @@ fetch("data.json")
     window.minDataCount = d3.min(withoutLocationByMonth.values()) || 1;
     window.maxDataCount = d3.max(withoutLocationByMonth.values()) || 1;
 
-    console.log(`Data count range across ALL months (top bar only): min=${window.minDataCount}, max=${window.maxDataCount}`);
-    console.log(`Total months with top bar data: ${withoutLocationByMonth.size}`);
-    console.log(`Top bar month counts:`, Array.from(withoutLocationByMonth.entries()).map(([month, count]) => ({
-      date: new Date(month).toISOString().slice(0, 7),
-      count
-    })));
-
     const topSpace = maxAbove * (rectHeight + verticalPadding);
     const bottomSpace = maxBelow * (rectHeight + verticalPadding);
     const separationPadding = 100;
@@ -307,10 +297,6 @@ fetch("data.json")
       .attr("transform", `translate(0,${axisY})`)
       .call(xAxis)
       .style("font-size", "16px");
-
-    console.log("X-axis group created:", xAxisGroup);
-    console.log("SVG after x-axis:", svg.node().innerHTML);
-    console.log("SVG children count:", svg.node().children.length);
 
     // After initial render, mirror to grid svgs and pulse during initial animations
     scheduleMirrorTimelineToGrid();
@@ -360,7 +346,6 @@ function goFullScreen() {
 
 function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.0, personId = 1) {
   const typeGroups = new Map();
-  console.log("dataArray length:", dataArray);
 
   // Don't update currentDataCount here - it should be based on specific date position
   // dataArray contains all visible items across the time window, not a specific date
@@ -424,8 +409,6 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
 
       // Get the color for this category's bounding box
       let boxColor = useSnowPattern ? "#FFFC00" : getCategoryColor(type);
-
-      console.log("Type:", type, "Box color:", boxColor);
 
       // Optionally brighten the color for better visibility as an outline
       // if (!useSnowPattern) {
@@ -626,17 +609,13 @@ function updateVisibleData(noseX, personId = 1) {
     } else if (personId === 2) {
       window.currentDataCount2 = itemsAtCenter;
     }
-
-    console.log(`Person ${personId} - Center date data count (top bar only): ${itemsAtCenter} at month ${centerMonth.toISOString()}`);
   } else {
-    // If no specific position, use total count in visible range (top bar only)
     const totalCount = visibleWithout.length;
     if (personId === 1) {
       window.currentDataCount1 = totalCount;
     } else if (personId === 2) {
       window.currentDataCount2 = totalCount;
     }
-    console.log(`Person ${personId} - Full range data count (top bar only): ${totalCount}`);
   }
 
 
