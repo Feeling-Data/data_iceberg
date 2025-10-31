@@ -1,5 +1,5 @@
 // Ocean-inspired generative piece with static-y pixelated gradients
-window.pixelSize = 10; // Larger pixels for better performance - globally accessible
+window.pixelSize = 12; // Larger pixels for better performance - globally accessible
 let time = 0;
 let waveOffset = 0;
 let oceanCanvas;
@@ -223,9 +223,17 @@ function createRippleAtCurrentPosition(personId = 1) {
   if (currentTimelinePosition === null) return; // No position data for this person
 
   // Map nose position to VIRTUAL CANVAS coordinates along the full 5760px width
-  // noseX ranges 0..videoWidth, percent inverted to match existing timeline logic
+  // Use the same curve calculation as timeline.js to ensure ripples match bar positions
   const rawPercent = Math.min(Math.max(currentTimelinePosition / videoWidth, 0), 1);
-  const invertedPercent = 1 - rawPercent;
+
+  // Apply same power curve as timeline (if DATE_SENSITIVITY_CURVE is available)
+  // Default to 0.5 if not defined (matches timeline default)
+  const sensitivityCurve = (typeof window !== 'undefined' && window.DATE_SENSITIVITY_CURVE !== undefined)
+    ? window.DATE_SENSITIVITY_CURVE : 0.5;
+  const curvedPercent = Math.pow(rawPercent, sensitivityCurve);
+
+  // Invert to match timeline logic (left = end, right = start)
+  const invertedPercent = 1 - curvedPercent;
   const rippleX = invertedPercent * oceanCanvas.width; // 0..5760 space
   const rippleY = xAxisY; // At the x-axis level
 

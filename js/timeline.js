@@ -8,6 +8,13 @@ let aboveOffsetPadding = 3, belowOffsetPadding = 8;
 window.videoWidth = 200;
 const videoWidth = window.videoWidth; // Also available as const for this file
 
+// Sensitivity control - uses a curve to reduce sensitivity while maintaining full range
+// Lower value = less sensitive (small movements produce smaller date changes)
+// Value between 0.3 and 1.0 - 0.5 is a good starting point
+const DATE_SENSITIVITY_CURVE = 0.5; // 0.5 = moderately less sensitive, 0.3 = very insensitive, 1.0 = linear (full sensitivity)
+// Expose to window so oceanGenerative.js can use the same curve
+window.DATE_SENSITIVITY_CURVE = DATE_SENSITIVITY_CURVE;
+
 // Global variables to share data count information with ocean generative
 window.currentDataCount1 = 0; // Person 1 data count
 window.currentDataCount2 = 0; // Person 2 data count
@@ -559,9 +566,17 @@ function updateVisibleData(noseX, personId = 1) {
   // If noseX is null/undefined, show all dates (for initial axis setup)
   // Otherwise, calculate the time window based on position
   if (noseX !== null && noseX !== undefined && !isNaN(noseX)) {
-    // Add slight granularity improvement - use more precise calculation
+    // Map noseX to percentage of video width (0 to 1)
     const rawPercent = Math.min(Math.max(noseX / videoWidth, 0), 1);
-    const percent = 1 - rawPercent;
+
+    // Apply power curve to reduce sensitivity: smaller movements = smaller changes
+    // Using a power < 1.0 makes the curve less steep (less sensitive)
+    // This still maps 0->0 and 1->1, so full range is maintained
+    const curvedPercent = Math.pow(rawPercent, DATE_SENSITIVITY_CURVE);
+
+    // Invert (left = end of timeline, right = start)
+    const percent = 1 - curvedPercent;
+
     // Always use 1 month window - never show wider window
     const windowMonths = 1;
     const fullRange = endDate - startDate;
