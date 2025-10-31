@@ -1,0 +1,18 @@
+{
+  "name": "data-iceberg-osc-bridge",
+  "version": "1.0.0",
+  "description": "OSC to WebSocket bridge for body tracking data",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["osc", "websocket", "bridge"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "osc": "^2.4.2",
+    "open": "^8.4.2",
+    "ws": "^8.18.0"
+  }
+}
+

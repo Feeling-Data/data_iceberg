@@ -4,6 +4,10 @@ let xScale, g, startDate, endDate;
 let axisY = 4, rectHeight = 0.6, verticalPadding = 0.2;
 let aboveOffsetPadding = 3, belowOffsetPadding = 8;
 
+// Video width constant (shared globally)
+window.videoWidth = 200;
+const videoWidth = window.videoWidth; // Also available as const for this file
+
 // Global variables to share data count information with ocean generative
 window.currentDataCount1 = 0; // Person 1 data count
 window.currentDataCount2 = 0; // Person 2 data count
@@ -303,6 +307,17 @@ fetch("data.json")
     observeTimelineForMirrors();
     pulseMirrorTimeline(1500);
 
+    // Render initial axis properly to avoid squishing
+    // Call updateVisibleData with null to just render the axis properly
+    setTimeout(() => {
+      if (xScale && g && startDate && endDate) {
+        // Render with null to show full timeline axis without bars
+        // This ensures proper sizing and prevents squishing
+        updateVisibleData(null, 1);
+        console.log('Timeline initialized with proper axis rendering');
+      }
+    }, 100);
+
   });
 
 // Store all the current Animations
@@ -521,7 +536,11 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
 }
 
 function updateVisibleData(noseX, personId = 1) {
-  if (!xScale || !g || !startDate || !endDate) return;
+  console.log(`[updateVisibleData] Called for Person ${personId} with noseX:`, noseX);
+  if (!xScale || !g || !startDate || !endDate) {
+    console.error(`[updateVisibleData] Missing dependencies: xScale=${!!xScale}, g=${!!g}, startDate=${!!startDate}, endDate=${!!endDate}`);
+    return;
+  }
 
   // Clear animations and elements for the specific person
   clearPersonAnimations(personId);
@@ -536,10 +555,14 @@ function updateVisibleData(noseX, personId = 1) {
   // Calculate time window based on the specific person's position
   let from = startDate, to = endDate;
   let centerTimeRaw = null;
-  if (noseX !== null && noseX !== undefined) {
+
+  // If noseX is null/undefined, show all dates (for initial axis setup)
+  // Otherwise, calculate the time window based on position
+  if (noseX !== null && noseX !== undefined && !isNaN(noseX)) {
     // Add slight granularity improvement - use more precise calculation
     const rawPercent = Math.min(Math.max(noseX / videoWidth, 0), 1);
     const percent = 1 - rawPercent;
+    // Always use 1 month window - never show wider window
     const windowMonths = 1;
     const fullRange = endDate - startDate;
     centerTimeRaw = new Date(+startDate + percent * fullRange);
@@ -571,28 +594,38 @@ function updateVisibleData(noseX, personId = 1) {
       .attr("transform", `translate(0,${axisY})`)
       .call(xAxis);
 
+    // Style all axis text first
     xAxisG.selectAll(".tick text")
       .style("font-size", "16px")
       .attr("transform", "rotate(-45)")
       .style("text-anchor", "end")
-      .style("fill", "#FFF")
+      .style("fill", "rgba(255,255,255,0.5)"); // Default faded color
+
+    // Highlight ticks in the visible range
+    xAxisG.selectAll(".tick text")
       .filter(function (d) {
         return d >= from && d <= to;
       })
       .style("fill", "#FFF")
-      .style("font-weight", "700")
-      .style("font-size", "16px");
+      .style("font-weight", "700");
   }
 
 
   // Filter data based on this person's specific time window
-  const visibleWith = withLocation
-    .filter(d => d.monthObj >= from && d.monthObj <= to)
-    .sort((a, b) => a.monthObj - b.monthObj || (a.type1_cluster || "").localeCompare(b.type1_cluster || ""));
+  // Only show bars if we have actual position data (noseX is valid)
+  const shouldShowBars = noseX !== null && noseX !== undefined && !isNaN(noseX);
 
-  const visibleWithout = withoutLocation
+  console.log(`[updateVisibleData] shouldShowBars=${shouldShowBars}, from=${from ? new Date(from).toISOString().substring(0,7) : 'null'}, to=${to ? new Date(to).toISOString().substring(0,7) : 'null'}`);
+
+  const visibleWith = shouldShowBars ? withLocation
     .filter(d => d.monthObj >= from && d.monthObj <= to)
-    .sort((a, b) => a.monthObj - b.monthObj || (a.type1_cluster || "").localeCompare(b.type1_cluster || ""));
+    .sort((a, b) => a.monthObj - b.monthObj || (a.type1_cluster || "").localeCompare(b.type1_cluster || "")) : [];
+
+  const visibleWithout = shouldShowBars ? withoutLocation
+    .filter(d => d.monthObj >= from && d.monthObj <= to)
+    .sort((a, b) => a.monthObj - b.monthObj || (a.type1_cluster || "").localeCompare(b.type1_cluster || "")) : [];
+
+  console.log(`[updateVisibleData] Found ${visibleWith.length} visibleWith and ${visibleWithout.length} visibleWithout items`);
 
   // Calculate data count for the specific center date (where ripple will be created)
   // Use ONLY top bar data (withoutLocation / is_alive === false)

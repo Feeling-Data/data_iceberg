@@ -302,11 +302,104 @@
         background: rgba(255, 255, 255, 0.1);
         border-color: rgba(255, 255, 255, 0.4);
       }
+
+      /* Debug Panel */
+      #debug-panel {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        z-index: 1002;
+        background: rgba(0, 0, 0, 0.85);
+        padding: 15px;
+        border-radius: 8px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        min-width: 300px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+      }
+
+      #debug-panel h4 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #fff;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        padding-bottom: 5px;
+      }
+
+      .debug-row {
+        margin: 8px 0;
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .debug-label {
+        display: inline-block;
+        width: 120px;
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      .debug-value {
+        display: inline-block;
+        color: rgba(100, 200, 255, 1);
+        font-weight: 600;
+      }
+
+      .debug-status {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 5px;
+      }
+
+      .debug-status.connected {
+        background: #00ff00;
+        box-shadow: 0 0 5px #00ff00;
+      }
+
+      .debug-status.disconnected {
+        background: #ff0000;
+        box-shadow: 0 0 5px #ff0000;
+      }
+
+      #toggle-debug-btn {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        z-index: 1003;
+        background: rgba(0, 0, 0, 0.85);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-family: 'Neue Haas Grotesk Display Pro', sans-serif;
+        font-size: 11px;
+        backdrop-filter: blur(10px);
+      }
     </style>
   </head>
 
   <body>
     <button id="toggle-grid-view" type="button">Toggle Grid</button>
+    <button id="toggle-debug-btn" onclick="toggleDebug()">🔍 Debug</button>
+
+    <!-- Debug Panel -->
+    <div id="debug-panel" style="display: none;">
+      <h4>Body Tracking Debug</h4>
+      <div class="debug-row">
+        <span class="debug-status disconnected" id="debug-status"></span>
+        <span class="debug-label">Connection:</span>
+        <span class="debug-value" id="debug-connection">Disconnected</span>
+      </div>
+      <div class="debug-row">
+        <span class="debug-label">Last Update:</span>
+        <span class="debug-value" id="debug-last-update">Never</span>
+      </div>
+      <div id="debug-persons"></div>
+    </div>
+
     <!-- Generative Ocean Background -->
     <div id="generative-container">
       <!-- <canvas id="ocean-generative"></canvas> -->
@@ -531,6 +624,19 @@
         document.addEventListener('DOMContentLoaded', setupOceanControls);
       } else {
         setupOceanControls();
+      }
+
+      // Toggle debug panel
+      function toggleDebug() {
+        const panel = document.getElementById('debug-panel');
+        const btn = document.getElementById('toggle-debug-btn');
+        if (panel.style.display === 'none') {
+          panel.style.display = 'block';
+          btn.textContent = '✕ Hide Debug';
+        } else {
+          panel.style.display = 'none';
+          btn.textContent = '🔍 Debug';
+        }
       }
     </script>
 
