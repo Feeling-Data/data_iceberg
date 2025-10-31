@@ -27,9 +27,8 @@ function updateDebugDisplay() {
       .sort((a, b) => b[1].confidence - a[1].confidence)
       .forEach(([originalId, rawData]) => {
         const isActive1 = originalId === activePerson1Id;
-        const isActive2 = originalId === activePerson2Id;
-        const activeLabel = isActive1 ? ' (Person 1)' : isActive2 ? ' (Person 2)' : '';
-        const activeColor = (isActive1 || isActive2) ? '#00ff00' : 'rgba(255,255,255,0.5)';
+        const activeLabel = isActive1 ? ' (Active)' : '';
+        const activeColor = isActive1 ? '#00ff00' : 'rgba(255,255,255,0.5)';
 
         const personDiv = document.createElement('div');
         personDiv.className = 'debug-row';
@@ -45,13 +44,13 @@ function updateDebugDisplay() {
       });
   }
 
-  // Show active display people (1 and 2)
+  // Show active display person
   if (personData.size > 0) {
     const activeDiv = document.createElement('div');
     activeDiv.style.marginTop = '10px';
     activeDiv.style.borderTop = '1px solid rgba(255,255,255,0.1)';
     activeDiv.style.paddingTop = '8px';
-    activeDiv.innerHTML = `<div style="color: rgba(100,200,255,1); font-size: 11px; margin-bottom: 5px;">Active Display People:</div>`;
+    activeDiv.innerHTML = `<div style="color: rgba(100,200,255,1); font-size: 11px; margin-bottom: 5px;">Active Person:</div>`;
     personsDiv.appendChild(activeDiv);
 
     personData.forEach((data, displayPersonId) => {
@@ -87,18 +86,27 @@ if (typeof window !== 'undefined') {
 // Store all detected people by their original OSC ID
 const allPeopleData = new Map(); // key: original OSC personId, value: { centerX, confidence, lastUpdate, etc. }
 
-// Map top 2 people to display person IDs (1 and 2)
+// Map top person to display person ID (only 1 person)
 let activePerson1Id = null; // Original OSC ID mapped to display person 1
-let activePerson2Id = null; // Original OSC ID mapped to display person 2
 
-// Processed data for the active display people (person 1 and 2)
-const personData = new Map(); // key: 1 or 2 (display person ID), value: tracking data
+// Processed data for the active display person
+const personData = new Map(); // key: 1 (display person ID), value: tracking data
 
 // Global variables for ocean ripple system (compatibility with oceanGenerative.js)
-window.noseX = null;  // Person 1 position
-window.noseX2 = null; // Person 2 position
-window.noseY = null;  // Person 1 Y (not used but needed for compatibility)
-window.noseY2 = null; // Person 2 Y (not used but needed for compatibility)
+window.noseX = null;  // Person position
+window.noseY = null;  // Person Y (not used but needed for compatibility)
+
+// Random date selection when no person is tracked
+let randomDateInterval = null;
+const RANDOM_DATE_INTERVAL_MS = 10000; // 10 seconds
+
+// Expose randomDateInterval to window so oceanGenerative.js can check if random mode is active
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'randomDateInterval', {
+    get: () => randomDateInterval,
+    set: (value) => { randomDateInterval = value; }
+  });
+}
 
 const SMOOTHING_WINDOW = 10;
 // videoWidth is defined in timeline.js - use window reference to avoid duplicate declaration
@@ -125,7 +133,7 @@ function initPersonData(personId) {
   return personData.get(personId);
 }
 
-// Update which people are active (top 2 by confidence) and process them
+// Update which people are active (closest to camera by area) and process them
 function updateActivePeople() {
   const now = Date.now();
   const STALE_TIMEOUT = 2000; // Remove people not seen for 2 seconds
@@ -134,19 +142,16 @@ function updateActivePeople() {
   for (const [id, data] of allPeopleData.entries()) {
     if (now - data.lastUpdate > STALE_TIMEOUT) {
       allPeopleData.delete(id);
-      // If this was an active person, clear them
+      // If this was the active person, clear them
       if (id === activePerson1Id) {
         activePerson1Id = null;
         clearDisplayPerson(1);
       }
-      if (id === activePerson2Id) {
-        activePerson2Id = null;
-        clearDisplayPerson(2);
-      }
     }
   }
 
-  // Sort all people by confidence (highest first)
+  // Sort all people by distance to camera (area = width * height, larger = closer)
+  // Still filter by minimum confidence to ensure valid detections
   // Note: confidence might be 0-100 scale or 0-1 scale, check both
   console.log(`[updateActivePeople] Processing ${allPeopleData.size} total people, MIN_CONFIDENCE=${MIN_CONFIDENCE}`);
 
@@ -158,89 +163,88 @@ function updateActivePeople() {
       const passes = conf >= MIN_CONFIDENCE || (conf >= 50 && conf <= 100);
       if (!passes) {
         console.log(`[updateActivePeople] Person ${id} filtered out: confidence=${conf} (threshold: ${MIN_CONFIDENCE} or 50-100 scale)`);
-      } else {
-        console.log(`[updateActivePeople] Person ${id} passed filter: confidence=${conf}`);
       }
       return passes;
     })
-    .sort((a, b) => b[1].confidence - a[1].confidence);
+    .map(([id, data]) => {
+      // Calculate area (proxy for distance - larger area = closer to camera)
+      const area = data.width * data.height;
+      return { id, data, area };
+    })
+    .sort((a, b) => b.area - a.area); // Sort by area descending (largest = closest)
 
   console.log(`[updateActivePeople] Found ${sortedPeople.length} valid people out of ${allPeopleData.size} total`);
 
-  // Select top 2 people
-  const topTwo = sortedPeople.slice(0, 2);
+  // Select closest person (largest area = closest to camera)
+  let newPerson1Id = sortedPeople.length > 0 ? sortedPeople[0].id : null;
 
-  // Determine new active person assignments
-  let newPerson1Id = topTwo.length > 0 ? topTwo[0][0] : null;
-  let newPerson2Id = topTwo.length > 1 ? topTwo[1][0] : null;
+  // Log if multiple people detected but only tracking closest one
+  if (sortedPeople.length > 1) {
+    console.log(`[updateActivePeople] ${sortedPeople.length} people detected - tracking closest person (OSC ID ${newPerson1Id}, area=${sortedPeople[0].area.toFixed(0)})`);
+  }
 
-  console.log(`[updateActivePeople] Top 2: Person 1 = OSC ID ${newPerson1Id}, Person 2 = OSC ID ${newPerson2Id}`);
+  console.log(`[updateActivePeople] Active person: OSC ID ${newPerson1Id}`);
 
-  // If person 1 changed, clear old person 1
+  // If person changed, clear old person
   if (activePerson1Id !== null && activePerson1Id !== newPerson1Id) {
-    if (activePerson1Id !== newPerson2Id) {
-      // Old person 1 is not becoming person 2, so clear them
-      clearDisplayPerson(1);
-    }
-  }
-
-  // If person 2 changed, clear old person 2
-  if (activePerson2Id !== null && activePerson2Id !== newPerson2Id) {
-    if (activePerson2Id !== newPerson1Id) {
-      // Old person 2 is not becoming person 1, so clear them
-      clearDisplayPerson(2);
-    }
-  }
-
-  // Update active person assignments
-  activePerson1Id = newPerson1Id;
-  activePerson2Id = newPerson2Id;
-
-  // Process the active people
-  if (activePerson1Id !== null) {
-    const data = allPeopleData.get(activePerson1Id);
-    console.log(`[updateActivePeople] Processing Person 1 (OSC ID ${activePerson1Id}) with centerX=${data.centerX}, confidence=${data.confidence}`);
-    processPersonData(1, data.centerX, data.confidence, data.width, data.height);
-  } else {
-    console.log(`[updateActivePeople] No Person 1, clearing display`);
     clearDisplayPerson(1);
   }
 
-  if (activePerson2Id !== null) {
-    const data = allPeopleData.get(activePerson2Id);
-    console.log(`[updateActivePeople] Processing Person 2 (OSC ID ${activePerson2Id}) with centerX=${data.centerX}, confidence=${data.confidence}`);
-    processPersonData(2, data.centerX, data.confidence, data.width, data.height);
+  // Update active person assignment
+  activePerson1Id = newPerson1Id;
+
+  // Process the active person
+  if (activePerson1Id !== null) {
+    const data = allPeopleData.get(activePerson1Id);
+    const centerX = data.centerX;
+    const confidence = data.confidence;
+    const width = data.width;
+    const height = data.height;
+    console.log(`[updateActivePeople] Processing person (OSC ID ${activePerson1Id}) with centerX=${centerX}, confidence=${confidence}`);
+
+    processPersonData(1, centerX, confidence, width, height);
   } else {
-    console.log(`[updateActivePeople] No Person 2, clearing display`);
-    clearDisplayPerson(2);
+    // Only clear display if not in random date mode (random date mode handles its own visualization)
+    if (randomDateInterval === null) {
+      console.log(`[updateActivePeople] No person detected, clearing display`);
+      clearDisplayPerson(1);
+    } else {
+      console.log(`[updateActivePeople] No person detected, but random date mode is active - keeping display`);
+    }
   }
 }
 
 // Clear display for a person (when they're no longer active)
 function clearDisplayPerson(displayPersonId) {
   // Clear timeline bars
-  if (displayPersonId === 1) {
-    if (typeof g !== 'undefined' && g) {
-      g.selectAll(".person-1").remove();
+  if (typeof g !== 'undefined' && g) {
+    g.selectAll(".person-1").remove();
+  }
+  window.noseX = null;
+  window.noseY = null;
+  // Clear person data
+  personData.delete(1);
+
+  // Clear ripples and stop pulsing
+  if (typeof window !== 'undefined') {
+    if (typeof window.removePersonRipples === 'function') {
+      window.removePersonRipples(1);
     }
-    window.noseX = null;
-    window.noseY = null;
-    // Clear person data
-    personData.delete(1);
-  } else if (displayPersonId === 2) {
-    if (typeof g !== 'undefined' && g) {
-      g.selectAll(".person-2").remove();
-    }
-    window.noseX2 = null;
-    window.noseY2 = null;
-    // Clear person data
-    personData.delete(2);
+  }
+  // Stop pulsing to clean up pulse intervals
+  if (typeof stopPulsing === 'function') {
+    stopPulsing(1);
+  }
+
+  // Start random date selection when no person is tracked (if not already active)
+  if (randomDateInterval === null) {
+    startRandomDateSelection();
   }
 }
 
-// Process OSC data for a display person (1 or 2)
+// Process OSC data for the person
 function processPersonData(displayPersonId, centerX, confidence, width, height) {
-  console.log(`[processPersonData] Person ${displayPersonId}: centerX=${centerX}, confidence=${confidence}, width=${width}, height=${height}`);
+  console.log(`[processPersonData] centerX=${centerX}, confidence=${confidence}, width=${width}, height=${height}`);
   const data = initPersonData(displayPersonId);
 
   // Handle confidence - might be 0-1 scale or 0-100 scale
@@ -255,26 +259,16 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
     if (data.framesWithoutDetection < MAX_MISSING_FRAMES) {
       // Use last known position
       if (data.lastProcessedCenterX !== null) {
-        updateVisibleData(data.lastProcessedCenterX, displayPersonId);
+        updateVisibleData(data.lastProcessedCenterX, 1);
         // Keep global variables set for ocean ripple system
-        if (displayPersonId === 1) {
-          window.noseX = data.lastProcessedCenterX;
-          window.noseY = 75;
-        } else if (displayPersonId === 2) {
-          window.noseX2 = data.lastProcessedCenterX;
-          window.noseY2 = 75;
-        }
+        window.noseX = data.lastProcessedCenterX;
+        window.noseY = 75;
       }
     } else {
       data.centerX = null;
       // Clear global variables when person is lost
-      if (displayPersonId === 1) {
-        window.noseX = null;
-        window.noseY = null;
-      } else if (displayPersonId === 2) {
-        window.noseX2 = null;
-        window.noseY2 = null;
-      }
+      window.noseX = null;
+      window.noseY = null;
     }
     return;
   }
@@ -336,31 +330,127 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
     data.lastProcessedCenterX = smoothedCenterX;
 
     // Update global variables for ocean ripple system
-    if (displayPersonId === 1) {
-      window.noseX = smoothedCenterX;
-      window.noseY = 75; // Default Y position (middle of videoHeight/2)
-    } else if (displayPersonId === 2) {
-      window.noseX2 = smoothedCenterX;
-      window.noseY2 = 75; // Default Y position
+    window.noseX = smoothedCenterX;
+    window.noseY = 75; // Default Y position
+
+    // Stop random date selection since person is now tracked
+    stopRandomDateSelection();
+
+    // Stop any random date pulsing
+    if (typeof window !== 'undefined' && typeof window.stopPulsing === 'function') {
+      window.stopPulsing(1);
     }
 
-    console.log(`[Person ${displayPersonId}] Updating visualization with centerX: ${data.centerX.toFixed(2)} (history size: ${data.centerXHistory.length})`);
+    console.log(`[Person] Updating visualization with centerX: ${data.centerX.toFixed(2)} (history size: ${data.centerXHistory.length})`);
     if (typeof updateVisibleData === 'function') {
-      updateVisibleData(data.centerX, displayPersonId);
+      updateVisibleData(data.centerX, 1);
     } else {
       console.error('updateVisibleData function not available!');
     }
   } else {
     data.centerX = data.lastProcessedCenterX;
     // Still update global variables even if movement is below threshold
-    if (displayPersonId === 1) {
-      window.noseX = data.lastProcessedCenterX;
-      window.noseY = 75;
-    } else if (displayPersonId === 2) {
-      window.noseX2 = data.lastProcessedCenterX;
-      window.noseY2 = 75;
+    window.noseX = data.lastProcessedCenterX;
+    window.noseY = 75;
+    // Ensure random selection is stopped since person is tracked
+    stopRandomDateSelection();
+
+    // Stop any random date pulsing
+    if (typeof window !== 'undefined' && typeof window.stopPulsing === 'function') {
+      window.stopPulsing(1);
     }
   }
+}
+
+// Start random date selection when no person is tracked
+function startRandomDateSelection() {
+  // Don't start if already running or if a person is tracked
+  if (randomDateInterval !== null) {
+    return;
+  }
+  if (window.noseX !== null) {
+    return; // Person is tracked, don't start random selection
+  }
+
+  console.log('[RandomDate] Starting random date selection (every 10s)');
+
+  // Immediately select a random date
+  selectRandomDate();
+
+  // Then set up interval to select new random dates every 10 seconds
+  randomDateInterval = setInterval(() => {
+    // Check if person is now tracked - if so, stop random selection
+    if (window.noseX !== null) {
+      stopRandomDateSelection();
+      return;
+    }
+    selectRandomDate();
+  }, RANDOM_DATE_INTERVAL_MS);
+}
+
+// Stop random date selection
+function stopRandomDateSelection() {
+  if (randomDateInterval !== null) {
+    clearInterval(randomDateInterval);
+    randomDateInterval = null;
+    console.log('[RandomDate] Stopped random date selection (person tracked)');
+  }
+}
+
+// Select a random date position
+function selectRandomDate() {
+  // Only select if no person is tracked
+  if (window.noseX !== null && personData.has(1)) {
+    // If person data exists, a real person is tracked, don't override
+    return;
+  }
+
+  // Generate random position between 0 and videoWidth (0-200)
+  const currentVideoWidth = getVideoWidth();
+  const randomNoseX = Math.random() * currentVideoWidth;
+
+  // Update global variable for visualization
+  window.noseX = randomNoseX;
+  window.noseY = 75;
+
+  console.log(`[RandomDate] Selected random date at position: ${randomNoseX.toFixed(2)}`);
+
+  // Update visualization with random position
+  if (typeof updateVisibleData === 'function') {
+    updateVisibleData(randomNoseX, 1);
+  } else {
+    console.error('[RandomDate] updateVisibleData function not available!');
+  }
+
+  // Trigger ripple creation immediately for random dates (don't wait for settle delay)
+  // Reset lastTimelinePosition so checkForTimelineChanges will detect the change
+  if (typeof window !== 'undefined') {
+    window.lastTimelinePosition = null;
+  }
+
+  // Directly create ripple for random date (it's already "settled" since it's a random selection)
+  // Wait a bit to ensure timeline is updated first, then create ripples
+  setTimeout(() => {
+    if (typeof window !== 'undefined') {
+      // Stop any existing pulsing first (from previous random date)
+      if (typeof window.stopPulsing === 'function') {
+        window.stopPulsing(1);
+      }
+
+      // Reset lastTimelinePosition to trigger ripple creation
+      window.lastTimelinePosition = null;
+
+      // Create ripple immediately for random date
+      if (typeof window.createRippleAtCurrentPosition === 'function') {
+        window.createRippleAtCurrentPosition(1);
+      }
+
+      // Start pulsing for random dates (will create ripples periodically)
+      if (typeof window.startPulsing === 'function') {
+        window.startPulsing(1);
+      }
+    }
+  }, 200); // Small delay to ensure timeline update completes
 }
 
 // Connect to WebSocket server
@@ -426,7 +516,7 @@ function connectWebSocket() {
 
         console.log(`[WebSocket] Stored data for Person ${originalPersonId}, total people tracked: ${allPeopleData.size}`);
 
-        // Update active people selection (top 2 by confidence)
+        // Update active people selection (top person by confidence)
         updateActivePeople();
       } else {
         console.warn(`[WebSocket] Invalid argument count for /person/${originalPersonId}: expected 5, got ${args.length}`);
@@ -472,10 +562,23 @@ if (typeof window !== 'undefined') {
     document.addEventListener('DOMContentLoaded', () => {
       console.log('[poseDetection] DOM loaded, connecting WebSocket...');
       connectWebSocket();
+      // Start random date selection if no person is initially tracked
+      // Wait a bit for timeline to initialize first
+      setTimeout(() => {
+        if (window.noseX === null) {
+          startRandomDateSelection();
+        }
+      }, 2000); // Wait 2 seconds for initial setup
     });
   } else {
     console.log('[poseDetection] DOM already loaded, connecting WebSocket immediately...');
     connectWebSocket();
+    // Start random date selection if no person is initially tracked
+    setTimeout(() => {
+      if (window.noseX === null) {
+        startRandomDateSelection();
+      }
+    }, 2000); // Wait 2 seconds for initial setup
   }
 } else {
   console.error('[poseDetection] window is undefined!');

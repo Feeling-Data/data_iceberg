@@ -24,26 +24,26 @@ window.rippleStrengthFalloff = 0.08; // How quickly rings fade with distance (tr
 
 // Ripple effect variables - separate tracking for each person
 let ripples = [];
+// Expose function to remove ripples for a specific person
+window.removePersonRipples = function (personId) {
+  ripples = ripples.filter(r => r.personId !== personId);
+};
 let lastNoseX = null;
 let lastNoseY = null;
-let lastNoseX2 = null;
-let lastNoseY2 = null;
-let lastTimelinePosition1 = null;
-let lastTimelinePosition2 = null;
+let lastTimelinePosition = null;
+// Expose reference to window for random date selection (updated dynamically)
+Object.defineProperty(window, 'lastTimelinePosition', {
+  get: () => lastTimelinePosition,
+  set: (value) => { lastTimelinePosition = value; }
+});
 
-// Pulsing ripple when settled - separate for each person
-let settledTimeout1 = null;
-let settledTimeout2 = null;
-let pulseInterval1 = null;
-let pulseInterval2 = null;
-let isSettled1 = false;
-let isSettled2 = false;
-let lastRippleX1 = null;
-let lastRippleY1 = null;
-let lastRippleX2 = null;
-let lastRippleY2 = null;
-let currentPulseInterval1 = 3000; // Dynamic pulse interval based on ripple size
-let currentPulseInterval2 = 3000; // Dynamic pulse interval based on ripple size
+// Pulsing ripple when settled
+let settledTimeout = null;
+let pulseInterval = null;
+let isSettled = false;
+let lastRippleX = null;
+let lastRippleY = null;
+let currentPulseInterval = 3000; // Dynamic pulse interval based on ripple size
 const SETTLE_DELAY = 400; // Wait 400ms before considering "settled"
 
 // Performance optimization
@@ -215,15 +215,64 @@ function initOceanGenerative() {
   animate();
 }
 
-function createRippleAtCurrentPosition(personId = 1) {
-  // Create ripple at the x-axis position for specific person
-  const xAxisY = getXAxisPosition();
-  const currentTimelinePosition = personId === 1 ? noseX : noseX2;
+// Helper function to calculate maxRadius based on dataCount
+function calculateMaxRadius(dataCount) {
+  const minDataCount = window.minDataCount || 1;
+  const maxDataCount = window.maxDataCount || 1;
+  const baseCanvasHeight = (typeof oceanCanvas !== 'undefined' && oceanCanvas && oceanCanvas.height) ? oceanCanvas.height : 1080;
+  const baseMaxRadius = baseCanvasHeight * 0.45;
+  const minScale = 0.5;
+  const maxScale = 5;
 
-  if (currentTimelinePosition === null) return; // No position data for this person
+  let normalizedCount;
+  const range = maxDataCount - minDataCount;
+  if (range > 0) {
+    normalizedCount = (dataCount - minDataCount) / range;
+  } else {
+    normalizedCount = maxDataCount > 1 ? (dataCount / maxDataCount) : 0;
+  }
+  normalizedCount = Math.max(0, Math.min(1, normalizedCount));
+  normalizedCount = Math.pow(normalizedCount, 2.0);
+
+  const radiusScale = minScale + (normalizedCount * (maxScale - minScale));
+  return baseMaxRadius * radiusScale;
+}
+
+// Helper function to create two ripples (one above, one below) with proper spacing
+function createTwoRipples(rippleX, waveTopY, dataCount, personId) {
+  // Calculate maxRadius to determine spacing
+  const maxRadius = calculateMaxRadius(dataCount);
+
+  // Create first ripple at the top position (no delay)
+  ripples.push(new Ripple(rippleX, waveTopY, 0, dataCount, personId));
+
+  // Calculate vertical spacing to prevent overlap but keep them closer together
+  // Use a smaller multiplier (1.5x instead of 2x) and less padding for tighter spacing
+  const spacingPadding = 15; // Reduced padding between ripples
+  const verticalSpacing = (maxRadius * 1.5) + spacingPadding;
+
+  // Create second ripple below the first one with a delay for cascading effect
+  const secondRippleY = waveTopY + verticalSpacing;
+  const cascadeDelay = 10; // Frames delay for cascading effect (reduced for faster cascade)
+  ripples.push(new Ripple(rippleX, secondRippleY, cascadeDelay, dataCount, personId));
+}
+
+// Expose function globally for random date selection
+window.createRippleAtCurrentPosition = function (personId = 1) {
+  createRippleAtCurrentPositionInternal(personId);
+};
+
+function createRippleAtCurrentPositionInternal(personId = 1) {
+  // Create ripple at the x-axis position
+  const xAxisY = getXAxisPosition();
+  const currentTimelinePosition = noseX;
+
+  if (currentTimelinePosition === null) return; // No position data
 
   // Map nose position to VIRTUAL CANVAS coordinates along the full 5760px width
   // Use the same curve calculation as timeline.js to ensure ripples match bar positions
+  // Use window.videoWidth (defined in timeline.js) or fallback to 200
+  const videoWidth = (typeof window !== 'undefined' && window.videoWidth) ? window.videoWidth : 200;
   const rawPercent = Math.min(Math.max(currentTimelinePosition / videoWidth, 0), 1);
 
   // Apply same power curve as timeline (if DATE_SENSITIVITY_CURVE is available)
@@ -240,14 +289,9 @@ function createRippleAtCurrentPosition(personId = 1) {
   // Position ripple at the top of the wave (fixed Y position)
   const waveTopY = xAxisY + 50; // Fixed distance above x-axis
 
-  // Store position for pulsing based on person
-  if (personId === 1) {
-    lastRippleX1 = rippleX;
-    lastRippleY1 = waveTopY;
-  } else {
-    lastRippleX2 = rippleX;
-    lastRippleY2 = waveTopY;
-  }
+  // Store position for pulsing
+  lastRippleX = rippleX;
+  lastRippleY = waveTopY;
 
   // Clear old ripples to prevent buildup (keep some from each person)
   if (ripples.length > 8) {
@@ -255,12 +299,12 @@ function createRippleAtCurrentPosition(personId = 1) {
   }
 
   // Get data count from timeline if available
-  const dataCount = personId === 1 ?
-    (typeof window.currentDataCount1 !== 'undefined' ? window.currentDataCount1 : 1) :
-    (typeof window.currentDataCount2 !== 'undefined' ? window.currentDataCount2 : 1);
+  const dataCount = (typeof window.currentDataCount1 !== 'undefined' ? window.currentDataCount1 : 1);
 
-  // Create single ripple at the top of the wave with data count and person ID
-  ripples.push(new Ripple(rippleX, waveTopY, 0, dataCount, personId));
+  // Create two ripples (top and bottom) with proper spacing
+  createTwoRipples(rippleX, waveTopY, dataCount, personId);
+  // Sync ripples array with global reference
+  window.oceanGenerativeRipples = ripples;
 
   // console.log(`Timeline ripple created for Person ${personId} at:`, rippleX, waveTopY, "with dataCount:", dataCount);
 }
@@ -306,128 +350,92 @@ function calculatePulseInterval(dataCount) {
   return pulseInterval;
 }
 
-function startPulsing(personId = 1) {
-  const pulseInterval = personId === 1 ? pulseInterval1 : pulseInterval2;
-  if (pulseInterval) return; // Already pulsing for this person
+// Expose function globally for random date selection
+window.startPulsing = function (personId = 1) {
+  startPulsingInternal(personId);
+};
 
-  if (personId === 1) {
-    isSettled1 = true;
-  } else {
-    isSettled2 = true;
-  }
+function startPulsingInternal(personId = 1) {
+  if (pulseInterval) return; // Already pulsing
+
+  isSettled = true;
+  // Create immediate ripple when settled
+  createRippleAtCurrentPositionInternal(1);
 
   // Calculate dynamic pulse interval based on current data count
-  const dataCount = personId === 1 ?
-    (typeof window.currentDataCount1 !== 'undefined' ? window.currentDataCount1 : 1) :
-    (typeof window.currentDataCount2 !== 'undefined' ? window.currentDataCount2 : 1);
+  const dataCount = (typeof window.currentDataCount1 !== 'undefined' ? window.currentDataCount1 : 1);
 
-  const currentPulseInterval = calculatePulseInterval(dataCount);
+  currentPulseInterval = calculatePulseInterval(dataCount);
 
-  if (personId === 1) {
-    currentPulseInterval1 = currentPulseInterval;
-  } else {
-    currentPulseInterval2 = currentPulseInterval;
-  }
-
-  // console.log(`Person ${personId} settled - starting ripple pulse every ${currentPulseInterval.toFixed(0)}ms`);
+  // console.log(`Person settled - starting ripple pulse every ${currentPulseInterval.toFixed(0)}ms`);
 
   // Create ripple on dynamic interval
-  const interval = setInterval(() => {
-    const lastRippleX = personId === 1 ? lastRippleX1 : lastRippleX2;
-    const lastRippleY = personId === 1 ? lastRippleY1 : lastRippleY2;
-
+  pulseInterval = setInterval(() => {
     if (lastRippleX !== null && lastRippleY !== null) {
-      const dataCount = personId === 1 ?
-        (typeof window.currentDataCount1 !== 'undefined' ? window.currentDataCount1 : 1) :
-        (typeof window.currentDataCount2 !== 'undefined' ? window.currentDataCount2 : 1);
-      ripples.push(new Ripple(lastRippleX, lastRippleY, 0, dataCount, personId));
-      // console.log(`Pulse ripple created for Person ${personId}`);
+      const dataCount = (typeof window.currentDataCount1 !== 'undefined' ? window.currentDataCount1 : 1);
+      // Create two ripples (top and bottom) with proper spacing
+      createTwoRipples(lastRippleX, lastRippleY, dataCount, 1);
+      // console.log(`Pulse ripple created`);
     }
   }, currentPulseInterval);
-
-  if (personId === 1) {
-    pulseInterval1 = interval;
-  } else {
-    pulseInterval2 = interval;
-  }
 }
 
-function stopPulsing(personId = 1) {
-  if (personId === 1) {
-    if (pulseInterval1) {
-      clearInterval(pulseInterval1);
-      pulseInterval1 = null;
-      isSettled1 = false;
-      // console.log("Person 1 moved - stopping ripple pulse");
-    }
-    if (settledTimeout1) {
-      clearTimeout(settledTimeout1);
-      settledTimeout1 = null;
-    }
-  } else {
-    if (pulseInterval2) {
-      clearInterval(pulseInterval2);
-      pulseInterval2 = null;
-      isSettled2 = false;
-      // console.log("Person 2 moved - stopping ripple pulse");
-    }
-    if (settledTimeout2) {
-      clearTimeout(settledTimeout2);
-      settledTimeout2 = null;
-    }
+// Expose function globally for random date selection
+window.stopPulsing = function (personId = 1) {
+  stopPulsingInternal(personId);
+};
+
+function stopPulsingInternal(personId = 1) {
+  if (pulseInterval) {
+    clearInterval(pulseInterval);
+    pulseInterval = null;
+    isSettled = false;
+    // console.log("Person moved - stopping ripple pulse");
+  }
+  if (settledTimeout) {
+    clearTimeout(settledTimeout);
+    settledTimeout = null;
   }
 }
 
 function checkForTimelineChanges() {
-  // Check Person 1 timeline position changes
-  if (typeof noseX !== 'undefined' && noseX !== null) {
-    const currentTimelinePosition1 = noseX;
+  // Check if we're in random date mode - if so, don't interfere (random dates handle their own ripples)
+  const isRandomDateMode = (typeof window !== 'undefined' && window.randomDateInterval !== undefined && window.randomDateInterval !== null);
 
-    // More sensitive detection for better synchronization
-    if (lastTimelinePosition1 === null ||
-      Math.abs(currentTimelinePosition1 - lastTimelinePosition1) > 1) {
-
-      // Person 1 moved - stop pulsing and reset settle timer
-      stopPulsing(1);
-
-      // Create immediate ripple
-      createRippleAtCurrentPosition(1);
-
-      lastTimelinePosition1 = currentTimelinePosition1;
-
-      // Start settle timer
-      settledTimeout1 = setTimeout(() => {
-        startPulsing(1);
-      }, SETTLE_DELAY);
+  if (isRandomDateMode) {
+    // In random date mode, don't interfere with the pulsing that was already started
+    // Just update lastTimelinePosition to avoid triggering change detection
+    if (typeof noseX !== 'undefined' && noseX !== null) {
+      lastTimelinePosition = noseX;
     }
+    return;
   }
 
-  // Check Person 2 timeline position changes
-  if (typeof noseX2 !== 'undefined' && noseX2 !== null) {
-    const currentTimelinePosition2 = noseX2;
+  // Check timeline position changes (only for real person tracking)
+  if (typeof noseX !== 'undefined' && noseX !== null) {
+    const currentTimelinePosition = noseX;
 
     // More sensitive detection for better synchronization
-    if (lastTimelinePosition2 === null ||
-      Math.abs(currentTimelinePosition2 - lastTimelinePosition2) > 1) {
+    if (lastTimelinePosition === null ||
+      Math.abs(currentTimelinePosition - lastTimelinePosition) > 1) {
 
-      // Person 2 moved - stop pulsing and reset settle timer
-      stopPulsing(2);
+      // Person moved - stop pulsing and reset settle timer
+      stopPulsingInternal(1);
 
-      // Create immediate ripple
-      createRippleAtCurrentPosition(2);
+      // Don't create ripple during movement - only when settled
 
-      lastTimelinePosition2 = currentTimelinePosition2;
+      lastTimelinePosition = currentTimelinePosition;
 
-      // Start settle timer
-      settledTimeout2 = setTimeout(() => {
-        startPulsing(2);
+      // Start settle timer - ripple will be created when settled
+      settledTimeout = setTimeout(() => {
+        startPulsingInternal(1);
       }, SETTLE_DELAY);
     }
   }
 }
 
 function checkForNoseMovement() {
-  // Check Person 1 nose movement
+  // Check nose movement
   if (typeof noseX !== 'undefined' && noseX !== null && noseY !== null) {
     // If nose position changed significantly, create a new ripple
     if (lastNoseX === null ||
@@ -445,49 +453,20 @@ function checkForNoseMovement() {
       }
 
       // Map nose position from video coordinates to canvas coordinates
+      const videoWidth = (typeof window !== 'undefined' && window.videoWidth) ? window.videoWidth : 200;
       const rippleX = (noseX / videoWidth) * oceanCanvas.width;
       const rippleY = (noseY / videoHeight) * oceanCanvas.height;
 
-      ripples.push(new Ripple(rippleX, rippleY, 0, 1, 1)); // Person 1
+      ripples.push(new Ripple(rippleX, rippleY, 0, 1, 1));
       lastNoseX = noseX;
       lastNoseY = noseY;
 
-      // console.log("Person 1 nose ripple created at:", rippleX, rippleY);
+      // console.log("Nose ripple created at:", rippleX, rippleY);
     }
   }
 
-  // Check Person 2 nose movement
-  if (typeof noseX2 !== 'undefined' && noseX2 !== null && noseY2 !== null) {
-    // If nose position changed significantly, create a new ripple
-    if (lastNoseX2 === null ||
-      Math.abs(noseX2 - lastNoseX2) > 5 ||
-      Math.abs(noseY2 - lastNoseY2) > 5) {
-
-      // Clear old ripples if position changed dramatically
-      const distance = lastNoseX2 !== null ?
-        Math.sqrt((noseX2 - lastNoseX2) ** 2 + (noseY2 - lastNoseY2) ** 2) : 0;
-
-      if (distance > 20) {
-        // Clear most existing ripples for dramatic position changes
-        ripples = ripples.filter(ripple => ripple.strength > 0.5);
-        // console.log("Cleared weak ripples due to large position change");
-      }
-
-      // Map nose position from video coordinates to canvas coordinates
-      const rippleX = (noseX2 / videoWidth) * oceanCanvas.width;
-      const rippleY = (noseY2 / videoHeight) * oceanCanvas.height;
-
-      ripples.push(new Ripple(rippleX, rippleY, 0, 1, 2)); // Person 2
-      lastNoseX2 = noseX2;
-      lastNoseY2 = noseY2;
-
-      // console.log("Person 2 nose ripple created at:", rippleX, rippleY);
-    }
-  }
-
-  // If no nose detected for either person, gradually clear all ripples
-  if ((typeof noseX === 'undefined' || noseX === null) &&
-    (typeof noseX2 === 'undefined' || noseX2 === null)) {
+  // If no nose detected, gradually clear all ripples
+  if (typeof noseX === 'undefined' || noseX === null) {
     if (ripples.length > 0) {
       ripples.forEach(ripple => {
         ripple.life -= 0.05; // Faster fade when no nose detected
@@ -514,11 +493,13 @@ function animate(currentTime) {
   // Disable nose movement ripples to avoid double ripples
   // checkForNoseMovement();
 
-  // Update ripples
+  // Update ripples and sync with global reference
   ripples = ripples.filter(ripple => {
     ripple.update();
     return ripple.isActive();
   });
+  // Keep global reference in sync
+  window.oceanGenerativeRipples = ripples;
 
   // Draw smooth sky area above the wave
   drawSkyArea();

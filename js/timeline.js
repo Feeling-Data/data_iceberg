@@ -16,8 +16,7 @@ const DATE_SENSITIVITY_CURVE = 0.5; // 0.5 = moderately less sensitive, 0.3 = ve
 window.DATE_SENSITIVITY_CURVE = DATE_SENSITIVITY_CURVE;
 
 // Global variables to share data count information with ocean generative
-window.currentDataCount1 = 0; // Person 1 data count
-window.currentDataCount2 = 0; // Person 2 data count
+window.currentDataCount1 = 0; // Person data count
 window.minDataCount = 1;
 window.maxDataCount = 1;
 
@@ -343,11 +342,11 @@ function clearActiveAnimations() {
 }
 
 function clearPersonAnimations(personId) {
-  // Clear all label timers to prevent orphaned labels
+  // Clear all label timers
   labelTimers.forEach(timer => clearTimeout(timer));
   labelTimers = [];
 
-  // Clear all animations to prevent orphaned animations
+  // Clear all animations
   activeAnimations.forEach(anim => {
     anim.selection().interrupt();
   });
@@ -459,6 +458,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
         .ease(d3.easeLinear)
         .attr("stroke-dashoffset", 0);
 
+      // Push to animation array
       activeAnimations.push(anim);
 
       // Fade rectangles to lower opacity as outline draws
@@ -467,6 +467,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
           .transition()
           .duration(DRAW_DURATION)
           .attr("opacity", opacity === .4 ? .25 : 1);
+        // Push to animation array
         activeAnimations.push(rectAnim);
       });
 
@@ -538,26 +539,37 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
           .duration(600)
           .style("opacity", 0.9);
       }, Math.max(0, animEndTime - Date.now()) + index * 100);
+      // Push to timer array
       labelTimers.push(timer);
     });
 }
 
+// Throttle updates to prevent excessive updates
+let lastUpdateTime = 0;
+const UPDATE_THROTTLE_MS = 50; // Minimum time between updates
+
 function updateVisibleData(noseX, personId = 1) {
-  console.log(`[updateVisibleData] Called for Person ${personId} with noseX:`, noseX);
+  // Throttle to prevent excessive updates
+  const now = Date.now();
+
+  if (now - lastUpdateTime < UPDATE_THROTTLE_MS) {
+    // Skip if too soon - prevents rapid-fire updates
+    return;
+  }
+
+  lastUpdateTime = now;
+
+  console.log(`[updateVisibleData] Called with noseX:`, noseX);
   if (!xScale || !g || !startDate || !endDate) {
     console.error(`[updateVisibleData] Missing dependencies: xScale=${!!xScale}, g=${!!g}, startDate=${!!startDate}, endDate=${!!endDate}`);
     return;
   }
 
-  // Clear animations and elements for the specific person
+  // Clear animations and elements
   clearPersonAnimations(personId);
 
-  if (personId === 1) {
-    g.selectAll(".person-1").remove();
-  } else if (personId === 2) {
-    g.selectAll(".person-2").remove();
-  }
-
+  // Remove bars
+  g.selectAll(".person-1").remove();
 
   // Calculate time window based on the specific person's position
   let from = startDate, to = endDate;
@@ -595,35 +607,32 @@ function updateVisibleData(noseX, personId = 1) {
     }
   }
 
-  // Only draw x-axis once (for person 1) to avoid duplication
-  if (personId === 1) {
-    // Always remove and redraw x-axis to ensure clean state
-    g.selectAll(".x-axis").remove();
+  // Always remove and redraw x-axis to ensure clean state
+  g.selectAll(".x-axis").remove();
 
-    const xAxis = d3.axisBottom(xScale)
-      .ticks(d3.timeMonth.every(1))
-      .tickFormat(d3.timeFormat("%b %Y"));
+  const xAxis = d3.axisBottom(xScale)
+    .ticks(d3.timeMonth.every(1))
+    .tickFormat(d3.timeFormat("%b %Y"));
 
-    const xAxisG = g.append("g")
-      .attr("class", "x-axis")
-      .attr("transform", `translate(0,${axisY})`)
-      .call(xAxis);
+  const xAxisG = g.append("g")
+    .attr("class", "x-axis")
+    .attr("transform", `translate(0,${axisY})`)
+    .call(xAxis);
 
-    // Style all axis text first
-    xAxisG.selectAll(".tick text")
-      .style("font-size", "16px")
-      .attr("transform", "rotate(-45)")
-      .style("text-anchor", "end")
-      .style("fill", "rgba(255,255,255,0.5)"); // Default faded color
+  // Style all axis text first
+  xAxisG.selectAll(".tick text")
+    .style("font-size", "16px")
+    .attr("transform", "rotate(-45)")
+    .style("text-anchor", "end")
+    .style("fill", "rgba(255,255,255,0.5)"); // Default faded color
 
-    // Highlight ticks in the visible range
-    xAxisG.selectAll(".tick text")
-      .filter(function (d) {
-        return d >= from && d <= to;
-      })
-      .style("fill", "#FFF")
-      .style("font-weight", "700");
-  }
+  // Highlight ticks in the visible range
+  xAxisG.selectAll(".tick text")
+    .filter(function (d) {
+      return d >= from && d <= to;
+    })
+    .style("fill", "#FFF")
+    .style("font-weight", "700");
 
 
   // Filter data based on this person's specific time window
@@ -651,37 +660,21 @@ function updateVisibleData(noseX, personId = 1) {
     // Count ONLY withoutLocation items at the center month (top bar only)
     const itemsAtCenter = (window.withoutLocationByMonthCounts && window.withoutLocationByMonthCounts[centerMonthTime]) ? window.withoutLocationByMonthCounts[centerMonthTime] : 0;
 
-    // Store data count per person
-    if (personId === 1) {
-      window.currentDataCount1 = itemsAtCenter;
-    } else if (personId === 2) {
-      window.currentDataCount2 = itemsAtCenter;
-    }
+    // Store data count
+    window.currentDataCount1 = itemsAtCenter;
   } else {
     const totalCount = visibleWithout.length;
-    if (personId === 1) {
-      window.currentDataCount1 = totalCount;
-    } else if (personId === 2) {
-      window.currentDataCount2 = totalCount;
-    }
+    window.currentDataCount1 = totalCount;
   }
 
 
   const ABOVE_PADDING = 30;
   const BELOW_PADDING = 80;
 
-  // Create fresh offset maps for each person to avoid interference
+  // Create fresh offset maps to avoid interference
   // Reset offset maps on each movement to prevent stacking issues
-  let aboveOffsetMap, belowOffsetMap;
-  if (personId === 1) {
-    // Person 1 uses fresh offset maps each time
-    aboveOffsetMap = {};
-    belowOffsetMap = {};
-  } else {
-    // Person 2 uses fresh offset maps each time
-    aboveOffsetMap = {};
-    belowOffsetMap = {};
-  }
+  let aboveOffsetMap = {};
+  let belowOffsetMap = {};
 
   function getOffset(monthObj, map) {
     const key = +monthObj;
