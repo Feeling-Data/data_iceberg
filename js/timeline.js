@@ -227,7 +227,6 @@ fetch("data.json")
     noDateData = withoutDate;
 
     if (withDate.length === 0 && withoutDate.length === 0) {
-      console.error("No valid data found");
       return;
     }
 
@@ -320,7 +319,6 @@ fetch("data.json")
         // Render with null to show full timeline axis without bars
         // This ensures proper sizing and prevents squishing
         updateVisibleData(null, 1);
-        console.log('Timeline initialized with proper axis rendering');
       }
     }, 100);
 
@@ -559,9 +557,7 @@ function updateVisibleData(noseX, personId = 1) {
 
   lastUpdateTime = now;
 
-  console.log(`[updateVisibleData] Called with noseX:`, noseX);
   if (!xScale || !g || !startDate || !endDate) {
-    console.error(`[updateVisibleData] Missing dependencies: xScale=${!!xScale}, g=${!!g}, startDate=${!!startDate}, endDate=${!!endDate}`);
     return;
   }
 
@@ -639,8 +635,6 @@ function updateVisibleData(noseX, personId = 1) {
   // Only show bars if we have actual position data (noseX is valid)
   const shouldShowBars = noseX !== null && noseX !== undefined && !isNaN(noseX);
 
-  console.log(`[updateVisibleData] shouldShowBars=${shouldShowBars}, from=${from ? new Date(from).toISOString().substring(0,7) : 'null'}, to=${to ? new Date(to).toISOString().substring(0,7) : 'null'}`);
-
   const visibleWith = shouldShowBars ? withLocation
     .filter(d => d.monthObj >= from && d.monthObj <= to)
     .sort((a, b) => a.monthObj - b.monthObj || (a.type1_cluster || "").localeCompare(b.type1_cluster || "")) : [];
@@ -648,8 +642,6 @@ function updateVisibleData(noseX, personId = 1) {
   const visibleWithout = shouldShowBars ? withoutLocation
     .filter(d => d.monthObj >= from && d.monthObj <= to)
     .sort((a, b) => a.monthObj - b.monthObj || (a.type1_cluster || "").localeCompare(b.type1_cluster || "")) : [];
-
-  console.log(`[updateVisibleData] Found ${visibleWith.length} visibleWith and ${visibleWithout.length} visibleWithout items`);
 
   // Calculate data count for the specific center date (where ripple will be created)
   // Use ONLY top bar data (withoutLocation / is_alive === false)

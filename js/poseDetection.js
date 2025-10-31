@@ -153,7 +153,6 @@ function updateActivePeople() {
   // Sort all people by distance to camera (area = width * height, larger = closer)
   // Still filter by minimum confidence to ensure valid detections
   // Note: confidence might be 0-100 scale or 0-1 scale, check both
-  console.log(`[updateActivePeople] Processing ${allPeopleData.size} total people, MIN_CONFIDENCE=${MIN_CONFIDENCE}`);
 
   const sortedPeople = Array.from(allPeopleData.entries())
     .filter(([id, data]) => {
@@ -161,9 +160,6 @@ function updateActivePeople() {
       const conf = data.confidence;
       // Accept if confidence is >= 0.5 (normalized) OR >= 50 (0-100 scale)
       const passes = conf >= MIN_CONFIDENCE || (conf >= 50 && conf <= 100);
-      if (!passes) {
-        console.log(`[updateActivePeople] Person ${id} filtered out: confidence=${conf} (threshold: ${MIN_CONFIDENCE} or 50-100 scale)`);
-      }
       return passes;
     })
     .map(([id, data]) => {
@@ -173,17 +169,8 @@ function updateActivePeople() {
     })
     .sort((a, b) => b.area - a.area); // Sort by area descending (largest = closest)
 
-  console.log(`[updateActivePeople] Found ${sortedPeople.length} valid people out of ${allPeopleData.size} total`);
-
   // Select closest person (largest area = closest to camera)
   let newPerson1Id = sortedPeople.length > 0 ? sortedPeople[0].id : null;
-
-  // Log if multiple people detected but only tracking closest one
-  if (sortedPeople.length > 1) {
-    console.log(`[updateActivePeople] ${sortedPeople.length} people detected - tracking closest person (OSC ID ${newPerson1Id}, area=${sortedPeople[0].area.toFixed(0)})`);
-  }
-
-  console.log(`[updateActivePeople] Active person: OSC ID ${newPerson1Id}`);
 
   // If person changed, clear old person
   if (activePerson1Id !== null && activePerson1Id !== newPerson1Id) {
@@ -200,16 +187,12 @@ function updateActivePeople() {
     const confidence = data.confidence;
     const width = data.width;
     const height = data.height;
-    console.log(`[updateActivePeople] Processing person (OSC ID ${activePerson1Id}) with centerX=${centerX}, confidence=${confidence}`);
 
     processPersonData(1, centerX, confidence, width, height);
   } else {
     // Only clear display if not in random date mode (random date mode handles its own visualization)
     if (randomDateInterval === null) {
-      console.log(`[updateActivePeople] No person detected, clearing display`);
       clearDisplayPerson(1);
-    } else {
-      console.log(`[updateActivePeople] No person detected, but random date mode is active - keeping display`);
     }
   }
 }
@@ -244,17 +227,14 @@ function clearDisplayPerson(displayPersonId) {
 
 // Process OSC data for the person
 function processPersonData(displayPersonId, centerX, confidence, width, height) {
-  console.log(`[processPersonData] centerX=${centerX}, confidence=${confidence}, width=${width}, height=${height}`);
   const data = initPersonData(displayPersonId);
 
   // Handle confidence - might be 0-1 scale or 0-100 scale
   // Convert to normalized (0-1) for comparison
   const normalizedConfidence = confidence > 1 ? confidence / 100 : confidence;
-  console.log(`[processPersonData] Person ${displayPersonId}: normalizedConfidence=${normalizedConfidence}, MIN_CONFIDENCE=${MIN_CONFIDENCE}`);
 
   // Only process if confidence is above threshold
   if (normalizedConfidence < MIN_CONFIDENCE) {
-    console.log(`[processPersonData] Person ${displayPersonId} REJECTED: confidence too low (${normalizedConfidence} < ${MIN_CONFIDENCE})`);
     data.framesWithoutDetection++;
     if (data.framesWithoutDetection < MAX_MISSING_FRAMES) {
       // Use last known position
@@ -275,7 +255,6 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
 
   // Reset missing frames counter
   data.framesWithoutDetection = 0;
-  console.log(`[processPersonData] Person ${displayPersonId} ACCEPTED: processing data`);
 
   // Convert center_x to match expected videoWidth range (0-200)
   // Python is sending normalized coordinates (0-1) where:
@@ -302,8 +281,6 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
 
   // Clamp to valid range
   normalizedCenterX = Math.max(0, Math.min(vWidth, normalizedCenterX));
-
-  console.log(`[Person ${displayPersonId}] Conversion: centerX=${centerX} (normalized=${centerX <= 1 && width < 1}) -> normalizedCenterX=${normalizedCenterX.toFixed(2)}`);
 
   // Add to smoothing history
   data.centerXHistory.push(normalizedCenterX);
@@ -341,11 +318,8 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
       window.stopPulsing(1);
     }
 
-    console.log(`[Person] Updating visualization with centerX: ${data.centerX.toFixed(2)} (history size: ${data.centerXHistory.length})`);
     if (typeof updateVisibleData === 'function') {
       updateVisibleData(data.centerX, 1);
-    } else {
-      console.error('updateVisibleData function not available!');
     }
   } else {
     data.centerX = data.lastProcessedCenterX;
@@ -372,7 +346,6 @@ function startRandomDateSelection() {
     return; // Person is tracked, don't start random selection
   }
 
-  console.log('[RandomDate] Starting random date selection (every 10s)');
 
   // Immediately select a random date
   selectRandomDate();
@@ -393,7 +366,6 @@ function stopRandomDateSelection() {
   if (randomDateInterval !== null) {
     clearInterval(randomDateInterval);
     randomDateInterval = null;
-    console.log('[RandomDate] Stopped random date selection (person tracked)');
   }
 }
 
@@ -413,13 +385,9 @@ function selectRandomDate() {
   window.noseX = randomNoseX;
   window.noseY = 75;
 
-  console.log(`[RandomDate] Selected random date at position: ${randomNoseX.toFixed(2)}`);
-
   // Update visualization with random position
   if (typeof updateVisibleData === 'function') {
     updateVisibleData(randomNoseX, 1);
-  } else {
-    console.error('[RandomDate] updateVisibleData function not available!');
   }
 
   // Trigger ripple creation immediately for random dates (don't wait for settle delay)
@@ -460,11 +428,9 @@ function connectWebSocket() {
   const wsPort = 8080;
   const wsUrl = `${wsProtocol}//${wsHost}:${wsPort}`;
 
-  console.log('Connecting to WebSocket:', wsUrl);
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
-    console.log('✅ WebSocket connected successfully');
     // Update debug display
     const statusEl = document.getElementById('debug-status');
     const connectionEl = document.getElementById('debug-connection');
@@ -480,19 +446,15 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data);
-      console.log(`[WebSocket] Received message:`, message);
 
       // Parse OSC address pattern: /person/{id}
       const match = message.address.match(/^\/person\/(\d+)$/);
       if (!match) {
-        console.log(`[WebSocket] Unknown address pattern: ${message.address}, ignoring`);
         return;
       }
 
       const originalPersonId = parseInt(match[1], 10);
       const args = message.args;
-
-      console.log(`[WebSocket] Processing Person ${originalPersonId} with args:`, args);
 
       // Expected format: [center_x, y2, confidence, width, height]
       if (args.length >= 5) {
@@ -501,8 +463,6 @@ function connectWebSocket() {
         const confidence = args[2];
         const width = args[3];
         const height = args[4];
-
-        console.log(`[WebSocket] Person ${originalPersonId}: centerX=${centerX}, confidence=${confidence}, width=${width}, height=${height}`);
 
         // Store raw data for this person
         allPeopleData.set(originalPersonId, {
@@ -514,24 +474,19 @@ function connectWebSocket() {
           lastUpdate: Date.now()
         });
 
-        console.log(`[WebSocket] Stored data for Person ${originalPersonId}, total people tracked: ${allPeopleData.size}`);
-
         // Update active people selection (top person by confidence)
         updateActivePeople();
-      } else {
-        console.warn(`[WebSocket] Invalid argument count for /person/${originalPersonId}: expected 5, got ${args.length}`);
       }
     } catch (error) {
-      console.error('[WebSocket] Error processing message:', error, event.data);
+      // Silently handle errors
     }
   };
 
   ws.onerror = (error) => {
-    console.error('❌ WebSocket error:', error);
+    // Silently handle errors
   };
 
   ws.onclose = (event) => {
-    console.log(`🔌 WebSocket disconnected (code: ${event.code}, reason: ${event.reason}), attempting to reconnect...`);
     // Update debug display
     const statusEl = document.getElementById('debug-status');
     const connectionEl = document.getElementById('debug-connection');
@@ -556,11 +511,8 @@ if (typeof window !== 'undefined') {
 
 // Initialize WebSocket connection when page loads
 if (typeof window !== 'undefined') {
-  console.log('[poseDetection] Initializing WebSocket connection...');
   if (document.readyState === 'loading') {
-    console.log('[poseDetection] Waiting for DOM to load...');
     document.addEventListener('DOMContentLoaded', () => {
-      console.log('[poseDetection] DOM loaded, connecting WebSocket...');
       connectWebSocket();
       // Start random date selection if no person is initially tracked
       // Wait a bit for timeline to initialize first
@@ -571,7 +523,6 @@ if (typeof window !== 'undefined') {
       }, 2000); // Wait 2 seconds for initial setup
     });
   } else {
-    console.log('[poseDetection] DOM already loaded, connecting WebSocket immediately...');
     connectWebSocket();
     // Start random date selection if no person is initially tracked
     setTimeout(() => {
@@ -580,8 +531,6 @@ if (typeof window !== 'undefined') {
       }
     }, 2000); // Wait 2 seconds for initial setup
   }
-} else {
-  console.error('[poseDetection] window is undefined!');
 }
 
 // function draw() {

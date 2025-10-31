@@ -167,7 +167,6 @@ function initOceanGenerative() {
 
   const container = document.getElementById('generative-container');
   if (!container) {
-    console.error("Container not found!");
     return;
   }
 
