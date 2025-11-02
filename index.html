@@ -55,7 +55,7 @@
       .grid-cell {
         position: absolute;
         width: 1920px; height: 1080px;
-        outline: 1px dashed rgba(255,255,255,0.25); /* visual placeholder */
+        /* outline: 1px dashed rgba(255,255,255,0.25); */ /* visual placeholder - removed */
         background: transparent;
       }
       .grid-cell.cell-1 { left: 0; top: 0; }
@@ -382,8 +382,8 @@
   </head>
 
   <body>
-    <button id="toggle-grid-view" type="button">Toggle Grid</button>
-    <button id="toggle-debug-btn" onclick="toggleDebug()">🔍 Debug</button>
+    <!-- <button id="toggle-grid-view" type="button">Toggle Grid</button> -->
+    <!-- <button id="toggle-debug-btn" onclick="toggleDebug()">🔍 Debug</button> -->
 
     <!-- Debug Panel -->
     <div id="debug-panel" style="display: none;">
@@ -416,7 +416,7 @@
     </div>
 
     <!-- Ocean Controls Panel -->
-    <button id="toggle-controls-btn" onclick="toggleControls()">🎛️ Ocean Controls</button>
+    <!-- <button id="toggle-controls-btn" onclick="toggleControls()">🎛️ Ocean Controls</button> -->
     <div id="ocean-controls" style="display: none;">
       <h3>Ocean Morphing Controls</h3>
 
@@ -569,12 +569,13 @@
       }
 
       // Grid view toggle (shell only)
+      // Default to grid mode on load (always enabled)
+      document.body.classList.add('grid-mode');
+
       (function() {
         const btn = document.getElementById('toggle-grid-view');
         if (!btn) return;
 
-        // Default to grid mode on load
-        document.body.classList.add('grid-mode');
         btn.textContent = 'Show Panoramic';
 
         btn.addEventListener('click', function() {
@@ -640,7 +641,7 @@
       }
     </script>
 
-    <button onclick="goFullScreen()">fullpage</button>
+    <!-- <button onclick="goFullScreen()">fullpage</button> -->
 
   </body>
 

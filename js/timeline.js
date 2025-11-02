@@ -3,6 +3,8 @@ let withLocation = [], withoutLocation = [];
 let xScale, g, startDate, endDate;
 let axisY = 4, rectHeight = 0.6, verticalPadding = 0.2;
 let aboveOffsetPadding = 3, belowOffsetPadding = 8;
+let svgHeight = 1080;
+let margin = { top: 40, right: 20, bottom: 40, left: 50 };
 
 // Video width constant (shared globally)
 window.videoWidth = 200;
@@ -258,7 +260,7 @@ fetch("data.json")
       .attr("x", 0)
       .attr("y", 0);
 
-    const margin = { top: 40, right: 20, bottom: 40, left: 50 };
+    margin = { top: 40, right: 20, bottom: 40, left: 50 };
     const width = svgWidth - margin.left - margin.right;
 
     xScale = d3.scaleTime().domain([startDate, endDate]).range([0, width]);
@@ -289,7 +291,7 @@ fetch("data.json")
 
     // Height already set to 1080px above
     // Position timeline higher up in the 1080px height
-    const svgHeight = 1080;
+    svgHeight = 1080;
     const centerY = svgHeight * 1.6 / 3; // Move to upper third instead of center
 
     // Adjust axisY to be positioned higher up
@@ -363,7 +365,7 @@ function goFullScreen() {
 }
 
 
-function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.0, personId = 1) {
+function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.0, personId = 1, customRectHeight = null) {
   const typeGroups = new Map();
 
   // Don't update currentDataCount here - it should be based on specific date position
@@ -400,7 +402,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
           .attr("x", x)
           .attr("y", y)
           .attr("width", 20)
-          .attr("height", rectHeight)
+          .attr("height", customRectHeight !== null ? customRectHeight : rectHeight)
           .attr("fill", fillColor)
           .attr("opacity", opacity)
           .attr("class", `type-rect type-${type.replace(/\s+/g, '-')} person-${personId}`);
@@ -424,7 +426,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
       const minX = d3.min(xs) - padding;
       const maxX = d3.max(xs) + 20 + padding;
       const minY = d3.min(ys) - padding;
-      const maxY = d3.max(ys) + rectHeight + padding;
+      const maxY = d3.max(ys) + (customRectHeight !== null ? customRectHeight : rectHeight) + padding;
 
       // Get the color for this category's bounding box
       let boxColor = useSnowPattern ? "#FFFC00" : getCategoryColor(type);
@@ -487,9 +489,9 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
   });
 
   // draw labels with colored indicators
-  const MIN_LABEL_SPACING = 8; // Reduced spacing
-  const occupiedLabelYs = [];
-  const labelHeight = 12; // Approximate text height
+  const MIN_LABEL_SPACING = 16; // Minimum vertical spacing between labels
+  const occupiedLabelYs = []; // Track occupied Y positions to prevent overlap
+  const labelHeight = 16; // Approximate text height including spacing
 
   typeBoxInfoList
     .sort((a, b) => a.anchorY - b.anchorY)
@@ -498,9 +500,62 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
         // Find the actual top position of this category's rectangles
         const categoryRects = typePositions.map(pos => pos.y);
         const actualTopY = d3.min(categoryRects);
-        let labelY = actualTopY; // Position at the actual top of the category's rectangles
+        let labelY = actualTopY; // Start at the actual top of the category's rectangles
 
-        // No collision detection - labels positioned exactly at their category tops
+        // Collision detection: check if label would overlap with previously placed labels
+        let hasCollision = true;
+        let attempts = 0;
+        const maxAttempts = 50; // Prevent infinite loops
+
+        while (hasCollision && attempts < maxAttempts) {
+          hasCollision = false;
+
+          // Check if this Y position (and its label height range) overlaps with any occupied position
+          for (let occupied of occupiedLabelYs) {
+            const labelTop = labelY;
+            const labelBottom = labelY + labelHeight;
+            const occupiedTop = occupied.top;
+            const occupiedBottom = occupied.bottom;
+
+            // Check for overlap
+            if (!(labelBottom < occupiedTop || labelTop > occupiedBottom)) {
+              hasCollision = true;
+              // Shift label down if it overlaps
+              labelY = occupiedBottom + MIN_LABEL_SPACING;
+              break;
+            }
+          }
+
+          attempts++;
+        }
+
+        // If we couldn't find a non-overlapping position, try shifting up
+        if (hasCollision) {
+          // Try positioning above the actualTopY
+          labelY = actualTopY - labelHeight - MIN_LABEL_SPACING;
+          hasCollision = false;
+
+          // Check if this position also has collisions
+          for (let occupied of occupiedLabelYs) {
+            const labelTop = labelY;
+            const labelBottom = labelY + labelHeight;
+            const occupiedTop = occupied.top;
+            const occupiedBottom = occupied.bottom;
+
+            if (!(labelBottom < occupiedTop || labelTop > occupiedBottom)) {
+              hasCollision = true;
+              // If above also collides, just use a safe offset from the top
+              labelY = occupiedTop - labelHeight - MIN_LABEL_SPACING;
+              break;
+            }
+          }
+        }
+
+        // Record this label's occupied space
+        occupiedLabelYs.push({
+          top: labelY,
+          bottom: labelY + labelHeight
+        });
 
         const targetX = anchorX; // Square touches the bar edge (no gap)
 
@@ -645,6 +700,7 @@ function updateVisibleData(noseX, personId = 1) {
 
   // Calculate data count for the specific center date (where ripple will be created)
   // Use ONLY top bar data (withoutLocation / is_alive === false)
+  // Also expose the actual center bar X position for ripple alignment
   if (centerTimeRaw) {
     const centerMonth = new Date(centerTimeRaw.getFullYear(), centerTimeRaw.getMonth(), 1);
     const centerMonthTime = +centerMonth;
@@ -658,6 +714,8 @@ function updateVisibleData(noseX, personId = 1) {
     const totalCount = visibleWithout.length;
     window.currentDataCount1 = totalCount;
   }
+
+  // Note: window.currentCenterBarX will be set later after we determine all visible bars
 
 
   const ABOVE_PADDING = 30;
@@ -674,23 +732,72 @@ function updateVisibleData(noseX, personId = 1) {
     return map[key] - 1;
   }
 
+  // Calculate maximum items per month in visible window for scaling
+  const maxAboveInWindow = visibleWith.length > 0 ? d3.max(d3.rollup(visibleWith, v => v.length, d => +d.monthObj).values()) || 1 : 1;
+  const maxBelowInWindow = visibleWithout.length > 0 ? d3.max(d3.rollup(visibleWithout, v => v.length, d => +d.monthObj).values()) || 1 : 1;
+
+  // Calculate available space
+  // axisY is in g element coordinates (g is translated by margin.top)
+  // So available space above is from 0 (top of g) to axisY
+  const availableAbove = Math.max(0, axisY - ABOVE_PADDING - 5); // Space from top of g to axis
+  // Available space below is from axisY to bottom of SVG (accounting for g's top margin)
+  const availableBelow = Math.max(0, svgHeight - margin.top - axisY - BELOW_PADDING - 5); // Space from axis to bottom
+
+  // Calculate required space with current spacing
+  const requiredAbove = maxAboveInWindow * (rectHeight + verticalPadding);
+  const requiredBelow = maxBelowInWindow * (rectHeight + verticalPadding);
+
+  // Calculate scale factors to fit within available space (with safety margin)
+  const scaleAbove = requiredAbove > 0 && availableAbove > 0 ? Math.min(1, (availableAbove * 0.95) / requiredAbove) : 1;
+  const scaleBelow = requiredBelow > 0 && availableBelow > 0 ? Math.min(1, (availableBelow * 0.95) / requiredBelow) : 1;
+
+  // Apply scaled spacing
+  const scaledSpacingAbove = (rectHeight + verticalPadding) * scaleAbove;
+  const scaledSpacingBelow = (rectHeight + verticalPadding) * scaleBelow;
+  const scaledRectHeightAbove = rectHeight * scaleAbove;
+  const scaledRectHeightBelow = rectHeight * scaleBelow;
+
+  // Calculate the actual center X position of visible bars for ripple alignment
+  // Find all unique months in visible data and calculate their average X position
+  if (shouldShowBars && (visibleWith.length > 0 || visibleWithout.length > 0)) {
+    const allVisibleMonths = new Set();
+    visibleWith.forEach(d => allVisibleMonths.add(+d.monthObj));
+    visibleWithout.forEach(d => allVisibleMonths.add(+d.monthObj));
+
+    if (allVisibleMonths.size > 0) {
+      const monthXPositions = Array.from(allVisibleMonths).map(monthTime => {
+        const monthDate = new Date(monthTime);
+        return xScale(monthDate) + margin.left + 10; // Center of bar (left edge + half width)
+      });
+
+      // Use average X position of all visible bars
+      const avgBarX = monthXPositions.reduce((sum, x) => sum + x, 0) / monthXPositions.length;
+      window.currentCenterBarX = avgBarX;
+    } else {
+      window.currentCenterBarX = null;
+    }
+  } else {
+    window.currentCenterBarX = null;
+  }
 
   // Draw bars for this specific person with person-specific classes
 
   drawClusterRects(
     visibleWith,
-    d => axisY - 5 - ABOVE_PADDING - (getOffset(d.monthObj, aboveOffsetMap) + 1) * (rectHeight + verticalPadding),
+    d => axisY - 5 - ABOVE_PADDING - (getOffset(d.monthObj, aboveOffsetMap) + 1) * scaledSpacingAbove,
     false,  // Use category colors
     1.0,    // Full opacity for top bar
-    personId
+    personId,
+    scaledRectHeightAbove  // Pass scaled height
   );
 
   drawClusterRects(
     visibleWithout,
-    d => axisY + 5 + BELOW_PADDING + getOffset(d.monthObj, belowOffsetMap) * (rectHeight + verticalPadding),
+    d => axisY + 5 + BELOW_PADDING + getOffset(d.monthObj, belowOffsetMap) * scaledSpacingBelow,
     false,  // Use category colors like upper bar
     .4,     // Semi-transparent for bottom bar
-    personId
+    personId,
+    scaledRectHeightBelow  // Pass scaled height
   );
 
   // At the end of updates, if grid is visible, refresh mirrors

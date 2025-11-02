@@ -4,15 +4,25 @@
   "description": "OSC to WebSocket bridge for body tracking data",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "start:python": "cd python && bash start.sh",
+    "start:server": "node server.js",
+    "start:all": "bash kill-ports.sh && concurrently \"npm run start:server\" \"npm run start:python\"",
+    "kill-ports": "bash kill-ports.sh"
   },
-  "keywords": ["osc", "websocket", "bridge"],
+  "keywords": [
+    "osc",
+    "websocket",
+    "bridge"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "osc": "^2.4.2",
     "open": "^8.4.2",
+    "osc": "^2.4.2",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }
-

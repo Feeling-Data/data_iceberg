@@ -65,7 +65,7 @@ class Ripple {
     // Base radius should depend on canvas HEIGHT (so it doesn't explode with 5760 width)
     const baseCanvasHeight = (typeof oceanCanvas !== 'undefined' && oceanCanvas && oceanCanvas.height) ? oceanCanvas.height : 1080;
     const baseMaxRadius = baseCanvasHeight * 0.45; // tuned for 1080 height
-    const minScale = .5; // Minimum 50% of base
+    const minScale = 0.3; // Reduced from 0.5 to make small ripples smaller (20% of base)
     const maxScale = 5;  // Up to 500% of base for very large months
 
     // Normalize data count safely
@@ -220,7 +220,7 @@ function calculateMaxRadius(dataCount) {
   const maxDataCount = window.maxDataCount || 1;
   const baseCanvasHeight = (typeof oceanCanvas !== 'undefined' && oceanCanvas && oceanCanvas.height) ? oceanCanvas.height : 1080;
   const baseMaxRadius = baseCanvasHeight * 0.45;
-  const minScale = 0.5;
+  const minScale = 0.2; // Reduced from 0.5 to make small ripples smaller
   const maxScale = 5;
 
   let normalizedCount;
@@ -237,7 +237,25 @@ function calculateMaxRadius(dataCount) {
   return baseMaxRadius * radiusScale;
 }
 
-// Helper function to create two ripples (one above, one below) with proper spacing
+// Helper function to determine if we should show 3 ripples (for small data counts)
+function shouldShowThreeRipples(dataCount) {
+  const minDataCount = window.minDataCount || 1;
+  const maxDataCount = window.maxDataCount || 1;
+
+  let normalizedCount;
+  const range = maxDataCount - minDataCount;
+  if (range > 0) {
+    normalizedCount = (dataCount - minDataCount) / range;
+  } else {
+    normalizedCount = maxDataCount > 1 ? (dataCount / maxDataCount) : 0;
+  }
+  normalizedCount = Math.max(0, Math.min(1, normalizedCount));
+
+  // Show 3 ripples if normalized count is below 0.4 (smaller bars)
+  return normalizedCount < 0.4;
+}
+
+// Helper function to create ripples (two for large bars, three for small bars)
 function createTwoRipples(rippleX, waveTopY, dataCount, personId) {
   // Calculate maxRadius to determine spacing
   const maxRadius = calculateMaxRadius(dataCount);
@@ -254,6 +272,13 @@ function createTwoRipples(rippleX, waveTopY, dataCount, personId) {
   const secondRippleY = waveTopY + verticalSpacing;
   const cascadeDelay = 10; // Frames delay for cascading effect (reduced for faster cascade)
   ripples.push(new Ripple(rippleX, secondRippleY, cascadeDelay, dataCount, personId));
+
+  // Add third ripple for small data counts
+  if (shouldShowThreeRipples(dataCount)) {
+    const thirdRippleY = secondRippleY + verticalSpacing;
+    const thirdCascadeDelay = cascadeDelay + 10; // Additional delay for third ripple
+    ripples.push(new Ripple(rippleX, thirdRippleY, thirdCascadeDelay, dataCount, personId));
+  }
 }
 
 // Expose function globally for random date selection
@@ -268,21 +293,30 @@ function createRippleAtCurrentPositionInternal(personId = 1) {
 
   if (currentTimelinePosition === null) return; // No position data
 
-  // Map nose position to VIRTUAL CANVAS coordinates along the full 5760px width
-  // Use the same curve calculation as timeline.js to ensure ripples match bar positions
-  // Use window.videoWidth (defined in timeline.js) or fallback to 200
-  const videoWidth = (typeof window !== 'undefined' && window.videoWidth) ? window.videoWidth : 200;
-  const rawPercent = Math.min(Math.max(currentTimelinePosition / videoWidth, 0), 1);
+  // Use the actual center bar X position from timeline.js if available
+  // This ensures ripples are perfectly aligned with where bars are drawn
+  let rippleX;
+  if (typeof window !== 'undefined' && window.currentCenterBarX !== null && window.currentCenterBarX !== undefined) {
+    // Use the exact X position where the center bar is drawn (already accounts for margins and xScale)
+    rippleX = window.currentCenterBarX;
+  } else {
+    // Fallback: Map nose position to VIRTUAL CANVAS coordinates along the full 5760px width
+    // Use the same curve calculation as timeline.js to ensure ripples match bar positions
+    // Use window.videoWidth (defined in timeline.js) or fallback to 200
+    const videoWidth = (typeof window !== 'undefined' && window.videoWidth) ? window.videoWidth : 200;
+    const rawPercent = Math.min(Math.max(currentTimelinePosition / videoWidth, 0), 1);
 
-  // Apply same power curve as timeline (if DATE_SENSITIVITY_CURVE is available)
-  // Default to 0.5 if not defined (matches timeline default)
-  const sensitivityCurve = (typeof window !== 'undefined' && window.DATE_SENSITIVITY_CURVE !== undefined)
-    ? window.DATE_SENSITIVITY_CURVE : 0.5;
-  const curvedPercent = Math.pow(rawPercent, sensitivityCurve);
+    // Apply same power curve as timeline (if DATE_SENSITIVITY_CURVE is available)
+    // Default to 0.5 if not defined (matches timeline default)
+    const sensitivityCurve = (typeof window !== 'undefined' && window.DATE_SENSITIVITY_CURVE !== undefined)
+      ? window.DATE_SENSITIVITY_CURVE : 0.5;
+    const curvedPercent = Math.pow(rawPercent, sensitivityCurve);
 
-  // Invert to match timeline logic (left = end, right = start)
-  const invertedPercent = 1 - curvedPercent;
-  const rippleX = invertedPercent * oceanCanvas.width; // 0..5760 space
+    // Invert to match timeline logic (left = end, right = start)
+    const invertedPercent = 1 - curvedPercent;
+    rippleX = invertedPercent * oceanCanvas.width; // 0..5760 space
+  }
+
   const rippleY = xAxisY; // At the x-axis level
 
   // Position ripple at the top of the wave (fixed Y position)
@@ -315,7 +349,7 @@ function calculatePulseInterval(dataCount) {
 
   const baseCanvasHeight = (typeof oceanCanvas !== 'undefined' && oceanCanvas && oceanCanvas.height) ? oceanCanvas.height : 1080;
   const baseMaxRadius = baseCanvasHeight * 0.45;
-  const minScale = .5;
+  const minScale = 0.2; // Reduced from 0.5 to make small ripples smaller
   const maxScale = 5;
 
   // Normalize and apply exponential curve (same as Ripple constructor)
