@@ -576,8 +576,8 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
           .duration(400)
           .style("opacity", opacity);
 
-        // Add label text - vertically centered on the square with person-specific class
-        g.append("text")
+        // Add label text - category name in white
+        const labelText = g.append("text")
           .attr("x", targetX + 5)
           .attr("y", labelY + 2)
           .attr("fill", "white")
@@ -585,9 +585,20 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
           .attr("text-anchor", "start")
           .attr("dominant-baseline", "central")
           .attr("class", `person-${personId}`)
-          .style("opacity", 0)
-          .text(`${type} (${recordCount})`)
-          .transition()
+          .style("opacity", 0);
+
+        // Add category name
+        labelText.append("tspan")
+          .text(`${type}   `); // Extra spaces for spacing
+
+        // Add count in bold with category color
+        labelText.append("tspan")
+          .attr("font-weight", "bold")
+          .attr("fill", categoryColor)
+          .text(recordCount);
+
+        // Animate the label
+        labelText.transition()
           .delay(1200)
           .duration(600)
           .style("opacity", 0.9);
