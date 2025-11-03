@@ -362,8 +362,12 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
     let clampedCenterX = Math.max(CAMERA_MIN, Math.min(CAMERA_MAX, centerX));
 
     // Apply fish-eye distortion correction before mapping
-    // This corrects for lens distortion that compresses edges
-    clampedCenterX = correctFisheyeDistortion(clampedCenterX);
+    // Skip correction for very small values (near 0) to preserve precision
+    // Values near 0 need full resolution to distinguish between different timeline positions
+    if (clampedCenterX > 0.2) {
+      clampedCenterX = correctFisheyeDistortion(clampedCenterX);
+    }
+    // For values <= 0.2, keep them as-is to preserve resolution
 
     // Re-clamp after distortion correction (correction might push values slightly outside bounds)
     clampedCenterX = Math.max(CAMERA_MIN, Math.min(CAMERA_MAX, clampedCenterX));
