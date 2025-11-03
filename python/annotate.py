@@ -1,7 +1,7 @@
 from PIL import ImageDraw, Image, ImageFont
 from fps import fps_counter
-font = ImageFont.truetype("Arial.ttf", 24)
-font2 = ImageFont.truetype("Arial.ttf", 36)
+font = ImageFont.load_default()
+font2 = ImageFont.load_default()
 
 def annotate_fps(frame):
     width,height=frame.size
