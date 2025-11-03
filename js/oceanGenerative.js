@@ -289,7 +289,7 @@ window.createRippleAtCurrentPosition = function (personId = 1) {
 function createRippleAtCurrentPositionInternal(personId = 1) {
   // Create ripple at the x-axis position
   const xAxisY = getXAxisPosition();
-  const currentTimelinePosition = noseX;
+  const currentTimelinePosition = window.noseX;
 
   if (currentTimelinePosition === null) return; // No position data
 
@@ -438,15 +438,15 @@ function checkForTimelineChanges() {
   if (isRandomDateMode) {
     // In random date mode, don't interfere with the pulsing that was already started
     // Just update lastTimelinePosition to avoid triggering change detection
-    if (typeof noseX !== 'undefined' && noseX !== null) {
-      lastTimelinePosition = noseX;
+    if (typeof window !== 'undefined' && window.noseX !== undefined && window.noseX !== null) {
+      lastTimelinePosition = window.noseX;
     }
     return;
   }
 
   // Check timeline position changes (only for real person tracking)
-  if (typeof noseX !== 'undefined' && noseX !== null) {
-    const currentTimelinePosition = noseX;
+  if (typeof window !== 'undefined' && window.noseX !== undefined && window.noseX !== null) {
+    const currentTimelinePosition = window.noseX;
 
     // More sensitive detection for better synchronization
     if (lastTimelinePosition === null ||
@@ -469,15 +469,15 @@ function checkForTimelineChanges() {
 
 function checkForNoseMovement() {
   // Check nose movement
-  if (typeof noseX !== 'undefined' && noseX !== null && noseY !== null) {
+  if (typeof window !== 'undefined' && window.noseX !== undefined && window.noseX !== null && window.noseY !== null) {
     // If nose position changed significantly, create a new ripple
     if (lastNoseX === null ||
-      Math.abs(noseX - lastNoseX) > 5 ||
-      Math.abs(noseY - lastNoseY) > 5) {
+      Math.abs(window.noseX - lastNoseX) > 5 ||
+      Math.abs(window.noseY - lastNoseY) > 5) {
 
       // Clear old ripples if position changed dramatically
       const distance = lastNoseX !== null ?
-        Math.sqrt((noseX - lastNoseX) ** 2 + (noseY - lastNoseY) ** 2) : 0;
+        Math.sqrt((window.noseX - lastNoseX) ** 2 + (window.noseY - lastNoseY) ** 2) : 0;
 
       if (distance > 20) {
         // Clear most existing ripples for dramatic position changes
@@ -487,19 +487,19 @@ function checkForNoseMovement() {
 
       // Map nose position from video coordinates to canvas coordinates
       const videoWidth = (typeof window !== 'undefined' && window.videoWidth) ? window.videoWidth : 200;
-      const rippleX = (noseX / videoWidth) * oceanCanvas.width;
-      const rippleY = (noseY / videoHeight) * oceanCanvas.height;
+      const rippleX = (window.noseX / videoWidth) * oceanCanvas.width;
+      const rippleY = (window.noseY / videoHeight) * oceanCanvas.height;
 
       ripples.push(new Ripple(rippleX, rippleY, 0, 1, 1));
-      lastNoseX = noseX;
-      lastNoseY = noseY;
+      lastNoseX = window.noseX;
+      lastNoseY = window.noseY;
 
       // console.log("Nose ripple created at:", rippleX, rippleY);
     }
   }
 
   // If no nose detected, gradually clear all ripples
-  if (typeof noseX === 'undefined' || noseX === null) {
+  if (typeof window === 'undefined' || window.noseX === undefined || window.noseX === null) {
     if (ripples.length > 0) {
       ripples.forEach(ripple => {
         ripple.life -= 0.05; // Faster fade when no nose detected
