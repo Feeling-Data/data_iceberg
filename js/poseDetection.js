@@ -295,8 +295,8 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
   if (width < 1 && centerX <= 1) {
     // Camera gives values 0-1, but we only accept points in 0.2-0.8 range
     // Values outside this range are clamped to the boundaries
-    const CAMERA_MIN = 0.2;
-    const CAMERA_MAX = 0.8;
+    const CAMERA_MIN = 0.15;
+    const CAMERA_MAX = 1;
 
     // Only accept values in the 0.2-0.8 range (clamp to boundaries if outside)
     const clampedCenterX = Math.max(CAMERA_MIN, Math.min(CAMERA_MAX, centerX));
