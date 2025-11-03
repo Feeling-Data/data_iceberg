@@ -36,7 +36,7 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
     frame_count += 1
 
     # Define the polygon points
-    polygon_points = np.array([[509, 335], [531, 441], [149, 830], [63, 707]], np.int32)
+    polygon_points = np.array([[10, 75], [233, 197], [286, 730], [7, 767]], np.int32)
     polygon_points = polygon_points.reshape((-1, 1, 2))
     def click_event(event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
@@ -45,7 +45,7 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
     # cv2.setMouseCallback(window_name, click_event)
 
     # Draw the polygon on the frame
-    # cv2.fillPoly(frame, [polygon_points], color=(0, 0, 0))
+    cv2.fillPoly(frame, [polygon_points], color=(0, 0, 0))
 
     if success:
         # Run YOLO tracking on the frame, persisting tracks between frames
@@ -70,17 +70,17 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
             x1,y1,x2,y2=detection
             center_x = ( x1 + x2 ) / 2
             center_y = ( y1 + y2 ) / 2
-            # print(f"Center: ({center_x*width:.1f}, {center_y*height:.1f}) Confidence: {conf:.2f} Track ID: {track_id}")
+            # print(f"Center: ({center_x:.1f}, {center_y:.1f}) Confidence: {conf:.2f} Track ID: {track_id}")
             msg = [float (center_x), float(y2), float(conf)*100, float(x2-x1), float(y2-y1)]
             id=pool.get_id(track_id)
 
             if id==None:
                 #was not able to get a new pooled id
                 continue
+            annotate_object(annotated_frame,f"id={id}",x1,y1,x2,y2)
 
-            if frame_count >= 10:
+            if frame_count >= 5:
                 frame_count = 0
-                annotate_object(annotated_frame,f"id={id}",x1,y1,x2,y2)
                 osc_address = f"/person/{id}"  # OSC address pattern for each person
                 try:
                     osc_client.send_message(osc_address, msg)
