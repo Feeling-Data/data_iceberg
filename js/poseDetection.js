@@ -141,7 +141,7 @@ function getVideoWidth() {
   return (typeof window !== 'undefined' && window.videoWidth) ? window.videoWidth : 200;
 }
 const videoHeight = 150;
-const NOSE_MOVE_THRESHOLD = 1; // Movement threshold for updates
+const NOSE_MOVE_THRESHOLD = 0.3; // Lower threshold to detect smaller movements between dates
 const MAX_MISSING_FRAMES = 5;
 const MIN_CONFIDENCE = 0.5; // Minimum confidence threshold
 
@@ -362,12 +362,8 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
     let clampedCenterX = Math.max(CAMERA_MIN, Math.min(CAMERA_MAX, centerX));
 
     // Apply fish-eye distortion correction before mapping
-    // Skip correction for very small values (near 0) to preserve precision
-    // Only apply correction if value is significant enough
-    if (clampedCenterX > 0.05) {
-      clampedCenterX = correctFisheyeDistortion(clampedCenterX);
-    }
-    // For very small values, keep them as-is to preserve resolution
+    // This corrects for lens distortion that compresses edges
+    clampedCenterX = correctFisheyeDistortion(clampedCenterX);
 
     // Re-clamp after distortion correction (correction might push values slightly outside bounds)
     clampedCenterX = Math.max(CAMERA_MIN, Math.min(CAMERA_MAX, clampedCenterX));
@@ -375,20 +371,10 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
     // Calculate the center of the camera range after distortion correction
     const CAMERA_CENTER = (CAMERA_MIN + CAMERA_MAX) / 2;
 
-    // Map camera range [CAMERA_MIN, CAMERA_MAX] to normalized timeline range [0, 1]
-    // For very small values (near 0), expand the mapping to preserve resolution
-    // This prevents small movements from collapsing to the same timeline position
+    // Map camera range [CAMERA_MIN, CAMERA_MAX] linearly to normalized timeline range [0, 1]
+    // This ensures proportional mapping: camera center -> timeline center (0.5)
     const cameraRange = CAMERA_MAX - CAMERA_MIN;
-    let normalizedPercent;
-
-    if (clampedCenterX < 0.1) {
-      // Expand small values: map 0-0.1 camera range to 0-0.2 normalized range (2x expansion)
-      // This gives more resolution for small movements
-      normalizedPercent = (clampedCenterX / 0.1) * 0.2;
-    } else {
-      // Normal mapping for larger values
-      normalizedPercent = (clampedCenterX - CAMERA_MIN) / cameraRange;
-    }
+    const normalizedPercent = (clampedCenterX - CAMERA_MIN) / cameraRange;
 
     // Clamp to ensure we stay within [0, 1] range
     const clampedPercent = Math.max(0, Math.min(1, normalizedPercent));

@@ -13,7 +13,7 @@ const videoWidth = window.videoWidth; // Also available as const for this file
 // Sensitivity control - uses a curve to reduce sensitivity while maintaining full range
 // Lower value = less sensitive (small movements produce smaller date changes)
 // Value between 0.3 and 1.0 - 0.5 is a good starting point
-const DATE_SENSITIVITY_CURVE = 0.5; // 0.5 = moderately less sensitive, 0.3 = very insensitive, 1.0 = linear (full sensitivity)
+const DATE_SENSITIVITY_CURVE = 1.0; // 1.0 = fully linear - no compression, maximum sensitivity to small movements
 // Expose to window so oceanGenerative.js can use the same curve
 window.DATE_SENSITIVITY_CURVE = DATE_SENSITIVITY_CURVE;
 
@@ -643,20 +643,10 @@ function updateVisibleData(noseX, personId = 1) {
     // Map noseX to percentage of video width (0 to 1)
     const rawPercent = Math.min(Math.max(noseX / videoWidth, 0), 1);
 
-    // Apply adaptive power curve: more linear near 0 for better responsiveness,
-    // more compressed in middle for stability
-    // Near 0: use higher curve (more linear/sensitive)
-    // Away from 0: use lower curve (less sensitive)
-    const edgeThreshold = 0.1; // First 10% of range
-    let adaptiveCurve;
-    if (rawPercent < edgeThreshold) {
-      // Near 0: use more linear curve (0.8-1.0) for better responsiveness
-      adaptiveCurve = 0.8 + (rawPercent / edgeThreshold) * 0.2; // Ranges from 0.8 to 1.0
-    } else {
-      // Away from 0: use configured curve for stability
-      adaptiveCurve = DATE_SENSITIVITY_CURVE;
-    }
-    const curvedPercent = Math.pow(rawPercent, adaptiveCurve);
+    // Apply power curve to reduce sensitivity: smaller movements = smaller changes
+    // Using a power < 1.0 makes the curve less steep (less sensitive)
+    // This still maps 0->0 and 1->1, so full range is maintained
+    const curvedPercent = Math.pow(rawPercent, DATE_SENSITIVITY_CURVE);
 
     // Invert (left = end of timeline, right = start)
     const percent = 1 - curvedPercent;
