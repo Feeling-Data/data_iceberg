@@ -79,14 +79,13 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
                 continue
             annotate_object(annotated_frame,f"id={id}",x1,y1,x2,y2)
 
-            if frame_count >= 5:
-                frame_count = 0
-                osc_address = f"/person/{id}"  # OSC address pattern for each person
-                try:
-                    osc_client.send_message(osc_address, msg)
-                    pass
-                except OSError as e:
-                    print(e)
+
+            osc_address = f"/person/{id}"  # OSC address pattern for each person
+            try:
+                osc_client.send_message(osc_address, msg)
+                pass
+            except OSError as e:
+                print(e)
 
         annotate_fps(annotated_frame)
         # Display the annotated frame
