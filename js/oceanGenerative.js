@@ -46,6 +46,12 @@ let lastRippleY = null;
 let currentPulseInterval = 3000; // Dynamic pulse interval based on ripple size
 const SETTLE_DELAY = 400; // Wait 400ms before considering "settled"
 
+// Movement-based settling: track recent positions to detect when person has settled
+let recentPositions = [];
+const SETTLE_DETECTION_WINDOW = 20; // Number of recent positions to track
+const SETTLE_THRESHOLD = 5; // Maximum distance between positions to consider "settled"
+const MOVEMENT_THRESHOLD = 3; // Minimum movement to consider as "moved" (ignores small noise)
+
 // Performance optimization
 let lastFrameTime = 0;
 const targetFPS = 30; // smoother animation
@@ -429,6 +435,8 @@ function stopPulsingInternal(personId = 1) {
     clearTimeout(settledTimeout);
     settledTimeout = null;
   }
+  // Clear recent positions when movement detected to start fresh
+  recentPositions = [];
 }
 
 function checkForTimelineChanges() {
@@ -448,21 +456,35 @@ function checkForTimelineChanges() {
   if (typeof window !== 'undefined' && window.noseX !== undefined && window.noseX !== null) {
     const currentTimelinePosition = window.noseX;
 
-    // More sensitive detection for better synchronization
-    if (lastTimelinePosition === null ||
-      Math.abs(currentTimelinePosition - lastTimelinePosition) > 1) {
+    // Track recent positions for movement-based settling
+    recentPositions.push(currentTimelinePosition);
+    if (recentPositions.length > SETTLE_DETECTION_WINDOW) {
+      recentPositions.shift();
+    }
 
-      // Person moved - stop pulsing and reset settle timer
+    // Detect significant movement (ignoring small noise)
+    if (lastTimelinePosition === null ||
+      Math.abs(currentTimelinePosition - lastTimelinePosition) > MOVEMENT_THRESHOLD) {
+
+      // Person moved significantly - stop pulsing
       stopPulsingInternal(1);
 
       // Don't create ripple during movement - only when settled
 
       lastTimelinePosition = currentTimelinePosition;
+    }
 
-      // Start settle timer - ripple will be created when settled
-      settledTimeout = setTimeout(() => {
+    // Check if person has settled based on recent positions
+    if (recentPositions.length >= SETTLE_DETECTION_WINDOW && !isSettled) {
+      // Calculate if all recent positions are within threshold of each other
+      const minPos = Math.min(...recentPositions);
+      const maxPos = Math.max(...recentPositions);
+      const positionSpread = maxPos - minPos;
+
+      if (positionSpread <= SETTLE_THRESHOLD) {
+        // Person has settled - start pulsing ripples
         startPulsingInternal(1);
-      }, SETTLE_DELAY);
+      }
     }
   }
 }

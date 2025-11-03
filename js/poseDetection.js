@@ -1,6 +1,9 @@
 // WebSocket connection for OSC data
 let ws = null;
 
+// Store last OSC message for display
+let lastOSCMessage = null;
+
 // Debug display updates
 function updateDebugDisplay() {
   if (typeof document === 'undefined') return;
@@ -74,6 +77,28 @@ function updateDebugDisplay() {
   const lastUpdateEl = document.getElementById('debug-last-update');
   if (lastUpdateEl) {
     lastUpdateEl.textContent = new Date().toLocaleTimeString();
+  }
+
+  // Show last OSC message
+  if (lastOSCMessage) {
+    const oscDiv = document.createElement('div');
+    oscDiv.style.marginTop = '10px';
+    oscDiv.style.borderTop = '1px solid rgba(255,255,255,0.1)';
+    oscDiv.style.paddingTop = '8px';
+    oscDiv.innerHTML = `<div style="color: rgba(255,255,255,0.7); font-size: 11px; margin-bottom: 5px;">Last OSC Message:</div>`;
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'debug-row';
+    messageDiv.style.marginLeft = '10px';
+    messageDiv.style.color = 'rgba(200,255,200,0.9)';
+    messageDiv.style.fontSize = '10px';
+    messageDiv.style.fontFamily = 'monospace';
+    messageDiv.style.whiteSpace = 'pre-wrap';
+    messageDiv.style.wordBreak = 'break-all';
+    messageDiv.textContent = JSON.stringify(lastOSCMessage, null, 2);
+
+    oscDiv.appendChild(messageDiv);
+    personsDiv.appendChild(oscDiv);
   }
 }
 
@@ -268,9 +293,21 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
   // Detect if values are normalized (0-1) or pixel values
   // If width is less than 1, assume normalized coordinates
   if (width < 1 && centerX <= 1) {
-    // Values are normalized (0-1), convert to pixel range
-    // centerX of 0.50 means 50% across the frame = 100px in a 200px wide video
-    normalizedCenterX = centerX * vWidth;
+    // Camera gives values 0-1, but we only accept points in 0.2-0.8 range
+    // Values outside this range are clamped to the boundaries
+    const CAMERA_MIN = 0.2;
+    const CAMERA_MAX = 0.8;
+
+    // Only accept values in the 0.2-0.8 range (clamp to boundaries if outside)
+    const clampedCenterX = Math.max(CAMERA_MIN, Math.min(CAMERA_MAX, centerX));
+
+    // Remap from room range [0.2, 0.8] to full timeline range [0, 1]
+    // This ensures the usable room space maps to the entire timeline
+    const remappedCenterX = (clampedCenterX - CAMERA_MIN) / (CAMERA_MAX - CAMERA_MIN);
+
+    // Convert remapped value (0-1) to pixel range for timeline
+    // remappedCenterX of 0.0 means start of timeline (0px), 1.0 means end (200px)
+    normalizedCenterX = remappedCenterX * vWidth;
   } else if (width > 0 && width > 1) {
     // Values are in pixels, normalize using width
     normalizedCenterX = (centerX / width) * vWidth;
@@ -447,6 +484,9 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data);
+
+      // Store last message for display
+      lastOSCMessage = message;
 
       // Parse OSC address pattern: /person/{id}
       const match = message.address.match(/^\/person\/(\d+)$/);
