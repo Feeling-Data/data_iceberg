@@ -134,6 +134,15 @@ if (typeof window !== 'undefined') {
 }
 
 const SMOOTHING_WINDOW = 10;
+// Use smaller smoothing window near edges for more responsive updates
+function getSmoothingWindow(centerX, videoWidth) {
+  // Near edges (first/last 20% of range), use less smoothing
+  const edgeThreshold = videoWidth * 0.2;
+  if (centerX < edgeThreshold || centerX > (videoWidth - edgeThreshold)) {
+    return Math.max(3, Math.floor(SMOOTHING_WINDOW * 0.5)); // Half smoothing at edges
+  }
+  return SMOOTHING_WINDOW;
+}
 // videoWidth is defined in timeline.js - use window reference to avoid duplicate declaration
 // Don't declare videoWidth here - just reference window.videoWidth when needed
 // For convenience, create a local reference function
@@ -141,7 +150,7 @@ function getVideoWidth() {
   return (typeof window !== 'undefined' && window.videoWidth) ? window.videoWidth : 200;
 }
 const videoHeight = 150;
-const NOSE_MOVE_THRESHOLD = 1; // Lower threshold for more responsive updates
+const NOSE_MOVE_THRESHOLD = 0.5; // Lower threshold for more responsive updates, especially near edges
 const MAX_MISSING_FRAMES = 5;
 const MIN_CONFIDENCE = 0.5; // Minimum confidence threshold
 
@@ -149,9 +158,9 @@ const MIN_CONFIDENCE = 0.5; // Minimum confidence threshold
 // Adjust this value to correct for lens distortion (0 = no correction, higher = more correction)
 // Typical values: 0.2-0.6 for moderate fish-eye, 0.6-1.0 for strong fish-eye
 // Expose to window for easy calibration adjustment
-window.FISHEYE_CORRECTION = 0.4; // Start with moderate correction, adjust based on testing
+window.FISHEYE_CORRECTION = 0.6; // Start with moderate correction, adjust based on testing
 const FISHEYE_CORRECTION = () => (typeof window !== 'undefined' && window.FISHEYE_CORRECTION !== undefined)
-  ? window.FISHEYE_CORRECTION : 0.4;
+  ? window.FISHEYE_CORRECTION : 0.6;
 
 /**
  * Corrects for fish-eye lens distortion
@@ -343,10 +352,20 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
   // Detect if values are normalized (0-1) or pixel values
   // If width is less than 1, assume normalized coordinates
   if (width < 1 && centerX <= 1) {
-    // Camera gives values 0-1, but we only accept points from 0.15 to 1.0
-    // The center of this range (0.575) should map to the center of the timeline
-    const CAMERA_MIN = 0.15;
-    const CAMERA_MAX = 1.0;
+    // Camera gives values 0-1, but lower values (near 0) are inaccurate and insensitive
+    // Right side (near 1) is accurate and aligned
+    // Make camera range configurable for calibration
+    // Expose to window for easy calibration adjustment
+    if (typeof window !== 'undefined' && window.CAMERA_MIN === undefined) {
+      window.CAMERA_MIN = 0.4; // Start higher to exclude inaccurate low range - adjust based on testing
+    }
+    if (typeof window !== 'undefined' && window.CAMERA_MAX === undefined) {
+      window.CAMERA_MAX = 1.0;
+    }
+    const CAMERA_MIN = (typeof window !== 'undefined' && window.CAMERA_MIN !== undefined)
+      ? window.CAMERA_MIN : 0.4;
+    const CAMERA_MAX = (typeof window !== 'undefined' && window.CAMERA_MAX !== undefined)
+      ? window.CAMERA_MAX : 1.0;
 
     // Clamp to valid camera range
     let clampedCenterX = Math.max(CAMERA_MIN, Math.min(CAMERA_MAX, centerX));
@@ -359,11 +378,11 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
     clampedCenterX = Math.max(CAMERA_MIN, Math.min(CAMERA_MAX, clampedCenterX));
 
     // Calculate the center of the camera range after distortion correction
-    const CAMERA_CENTER = (CAMERA_MIN + CAMERA_MAX) / 2; // 0.575
+    const CAMERA_CENTER = (CAMERA_MIN + CAMERA_MAX) / 2;
 
-    // Map camera range [0.15, 1.0] linearly to normalized timeline range [0, 1]
-    // This ensures proportional mapping: camera center (0.575) -> timeline center (0.5)
-    const cameraRange = CAMERA_MAX - CAMERA_MIN; // 0.85
+    // Map camera range [CAMERA_MIN, CAMERA_MAX] linearly to normalized timeline range [0, 1]
+    // This ensures proportional mapping: camera center -> timeline center (0.5)
+    const cameraRange = CAMERA_MAX - CAMERA_MIN;
     const normalizedPercent = (clampedCenterX - CAMERA_MIN) / cameraRange;
 
     // Clamp to ensure we stay within [0, 1] range
@@ -386,7 +405,9 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
 
   // Add to smoothing history
   data.centerXHistory.push(normalizedCenterX);
-  if (data.centerXHistory.length > SMOOTHING_WINDOW) {
+  // Use adaptive smoothing: less smoothing near edges for more responsive updates
+  const smoothingWindow = getSmoothingWindow(normalizedCenterX, vWidth);
+  if (data.centerXHistory.length > smoothingWindow) {
     data.centerXHistory.shift();
   }
 
@@ -399,10 +420,14 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
   }
 
   // Always update if this is first detection, otherwise check if movement is significant enough
-  // Lower threshold to be more responsive to movement
+  // Use adaptive threshold: lower threshold near edges (0 and 200) for better responsiveness
+  const adaptiveThreshold = (smoothedCenterX < 20 || smoothedCenterX > 180)
+    ? NOSE_MOVE_THRESHOLD * 0.5  // More sensitive near edges
+    : NOSE_MOVE_THRESHOLD;         // Normal sensitivity in center
+
   const shouldUpdate = data.lastProcessedCenterX === null ||
     data.centerXHistory.length === 1 || // Always update on first frame with data
-    Math.abs(smoothedCenterX - data.lastProcessedCenterX) > NOSE_MOVE_THRESHOLD;
+    Math.abs(smoothedCenterX - data.lastProcessedCenterX) > adaptiveThreshold;
 
   if (shouldUpdate) {
     data.centerX = smoothedCenterX;
