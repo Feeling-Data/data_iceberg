@@ -113,8 +113,88 @@ httpServer.listen(HTTP_PORT, () => {
 
   // Automatically open browser
   const url = `http://localhost:${HTTP_PORT}`;
-  open(url).catch(err => {
-    console.log(`\n⚠️  Could not automatically open browser. Please navigate to: ${url}`);
-  });
+
+  // Check if we should open in fullscreen/kiosk mode
+  const fullscreen = process.env.FULLSCREEN === 'true' || process.argv.includes('--fullscreen');
+
+  if (fullscreen) {
+    // Try to open Chrome in kiosk mode (fullscreen)
+    const { exec } = require('child_process');
+    const platform = process.platform;
+
+    if (platform === 'darwin') {
+      // macOS: Try Chrome with kiosk mode
+      const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+      const fs = require('fs');
+
+      if (fs.existsSync(chromePath)) {
+        console.log('   Opening Chrome...');
+        exec(`"${chromePath}" --new-window "${url}"`, (err, stdout, stderr) => {
+          if (err) {
+            console.log(`   ⚠️  Chrome failed (${err.message}), trying regular browser...`);
+            open(url).catch(() => {
+              console.log(`\n⚠️  Could not automatically open browser. Please navigate to: ${url}`);
+            });
+          } else {
+            console.log('   ✅ Browser opened');
+          }
+        });
+      } else {
+        // Chrome not found, try regular open
+        console.log('   Chrome not found, opening default browser...');
+        open(url).catch(() => {
+          console.log(`\n⚠️  Could not automatically open browser. Please navigate to: ${url}`);
+        });
+      }
+    } else if (platform === 'linux') {
+      exec(`google-chrome --kiosk ${url} 2>/dev/null`, (err) => {
+        if (err) {
+          open(url).catch(() => {
+            console.log(`\n⚠️  Could not automatically open browser. Please navigate to: ${url}`);
+          });
+        }
+      });
+    } else {
+      // Windows: Try different Chrome paths
+      const chromePaths = [
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe'
+      ];
+
+      let chromeFound = false;
+      for (const chromePath of chromePaths) {
+        const fs = require('fs');
+        try {
+          if (fs.existsSync(chromePath)) {
+            exec(`"${chromePath}" --kiosk ${url}`, (err) => {
+              if (err) {
+                // Fallback to regular open
+                open(url).catch(() => {
+                  console.log(`\n⚠️  Could not automatically open browser. Please navigate to: ${url}`);
+                });
+              }
+            });
+            chromeFound = true;
+            break;
+          }
+        } catch (e) {
+          // Continue to next path
+        }
+      }
+
+      if (!chromeFound) {
+        // Fallback to regular open
+        open(url).catch(() => {
+          console.log(`\n⚠️  Could not automatically open browser. Please navigate to: ${url}`);
+        });
+      }
+    }
+  } else {
+    // Regular browser open
+    open(url).catch(err => {
+      console.log(`\n⚠️  Could not automatically open browser. Please navigate to: ${url}`);
+    });
+  }
 });
 

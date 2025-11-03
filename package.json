@@ -8,6 +8,7 @@
     "start:python": "cd python && bash start.sh",
     "start:server": "node server.js",
     "start:all": "bash kill-ports.sh && concurrently \"npm run start:server\" \"npm run start:python\"",
+    "start:full": "node start-all.js",
     "kill-ports": "bash kill-ports.sh"
   },
   "keywords": [
