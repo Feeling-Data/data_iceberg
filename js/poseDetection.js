@@ -215,8 +215,8 @@ function clearDisplayPerson(displayPersonId) {
     }
   }
   // Stop pulsing to clean up pulse intervals
-  if (typeof stopPulsing === 'function') {
-    stopPulsing(1);
+  if (typeof window !== 'undefined' && typeof window.stopPulsing === 'function') {
+    window.stopPulsing(1);
   }
 
   // Start random date selection when no person is tracked (if not already active)
@@ -311,11 +311,13 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
     window.noseY = 75; // Default Y position
 
     // Stop random date selection since person is now tracked
-    stopRandomDateSelection();
+    const wasInRandomMode = stopRandomDateSelection();
 
-    // Stop any random date pulsing
-    if (typeof window !== 'undefined' && typeof window.stopPulsing === 'function') {
-      window.stopPulsing(1);
+    // Stop any random date pulsing ONLY when switching from random mode to user tracking
+    if (wasInRandomMode) {
+      if (typeof window !== 'undefined' && typeof window.stopPulsing === 'function') {
+        window.stopPulsing(1);
+      }
     }
 
     if (typeof updateVisibleData === 'function') {
@@ -329,10 +331,7 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
     // Ensure random selection is stopped since person is tracked
     stopRandomDateSelection();
 
-    // Stop any random date pulsing
-    if (typeof window !== 'undefined' && typeof window.stopPulsing === 'function') {
-      window.stopPulsing(1);
-    }
+    // Don't stop pulsing here - let checkForTimelineChanges handle settle timer
   }
 }
 
@@ -363,10 +362,12 @@ function startRandomDateSelection() {
 
 // Stop random date selection
 function stopRandomDateSelection() {
+  const wasActive = randomDateInterval !== null;
   if (randomDateInterval !== null) {
     clearInterval(randomDateInterval);
     randomDateInterval = null;
   }
+  return wasActive;
 }
 
 // Select a random date position

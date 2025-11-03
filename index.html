@@ -21,6 +21,7 @@
         color: white;
         font-family: 'Neue Haas Grotesk Display Pro', sans-serif;
       }
+
       /* Grid toggle button */
       #toggle-grid-view {
         position: fixed;
@@ -38,6 +39,7 @@
         backdrop-filter: blur(10px);
         transition: all 0.3s ease;
       }
+
       #toggle-grid-view:hover {
         background: rgba(255, 255, 255, 0.1);
         border-color: rgba(255, 255, 255, 0.4);
@@ -46,25 +48,49 @@
       /* Grid container shell (hidden by default) */
       #grid-container {
         position: fixed;
-        top: 0; left: 0;
-        width: 3840px; height: 2160px;
+        top: 0;
+        left: 0;
+        width: 3840px;
+        height: 2160px;
         z-index: 900;
-        display: none; /* shown in grid-mode */
-        pointer-events: none; /* shell only for now */
+        display: none;
+        /* shown in grid-mode */
+        pointer-events: none;
+        /* shell only for now */
       }
+
       .grid-cell {
         position: absolute;
-        width: 1920px; height: 1080px;
-        /* outline: 1px dashed rgba(255,255,255,0.25); */ /* visual placeholder - removed */
+        width: 1920px;
+        height: 1080px;
+        /* outline: 1px dashed rgba(255,255,255,0.25); */
+        /* visual placeholder - removed */
         background: transparent;
       }
-      .grid-cell.cell-1 { left: 0; top: 0; }
-      .grid-cell.cell-2 { left: 1920px; top: 0; }
-      .grid-cell.cell-3 { left: 0; top: 1080px; }
+
+      .grid-cell.cell-1 {
+        left: 0;
+        top: 0;
+      }
+
+      .grid-cell.cell-2 {
+        left: 1920px;
+        top: 0;
+      }
+
+      .grid-cell.cell-3 {
+        left: 0;
+        top: 1080px;
+      }
 
       /* Mode toggling */
-      body.grid-mode #grid-container { display: block; }
-      body.grid-mode #scroll-container { display: none; }
+      body.grid-mode #grid-container {
+        display: block;
+      }
+
+      body.grid-mode #scroll-container {
+        display: none;
+      }
 
       .event {
         stroke-width: 0.5px;
@@ -120,11 +146,13 @@
         left: 0 !important;
         z-index: 1 !important;
       }
+
       /* Only scale other canvases, NEVER the ocean canvas */
       #generative-container canvas:not(#ocean-canvas) {
         width: 100% !important;
         height: 100% !important;
       }
+
       /* Ensure our ocean canvas never stretches - fixed render size */
       #ocean-canvas {
         width: 5760px !important;
@@ -410,9 +438,12 @@
       <canvas id="grid-canvas-1" class="grid-cell cell-1" width="1920" height="1080"></canvas>
       <canvas id="grid-canvas-2" class="grid-cell cell-2" width="1920" height="1080"></canvas>
       <canvas id="grid-canvas-3" class="grid-cell cell-3" width="1920" height="1080"></canvas>
-      <svg id="grid-svg-1" class="grid-cell cell-1" width="1920" height="1080" style="pointer-events:none; position:absolute; z-index:902;"></svg>
-      <svg id="grid-svg-2" class="grid-cell cell-2" width="1920" height="1080" style="pointer-events:none; position:absolute; z-index:902;"></svg>
-      <svg id="grid-svg-3" class="grid-cell cell-3" width="1920" height="1080" style="pointer-events:none; position:absolute; z-index:902;"></svg>
+      <svg id="grid-svg-1" class="grid-cell cell-1" width="1920" height="1080"
+        style="pointer-events:none; position:absolute; z-index:902;"></svg>
+      <svg id="grid-svg-2" class="grid-cell cell-2" width="1920" height="1080"
+        style="pointer-events:none; position:absolute; z-index:902;"></svg>
+      <svg id="grid-svg-3" class="grid-cell cell-3" width="1920" height="1080"
+        style="pointer-events:none; position:absolute; z-index:902;"></svg>
     </div>
 
     <!-- Ocean Controls Panel -->
@@ -572,13 +603,13 @@
       // Default to grid mode on load (always enabled)
       document.body.classList.add('grid-mode');
 
-      (function() {
+      (function () {
         const btn = document.getElementById('toggle-grid-view');
         if (!btn) return;
 
         btn.textContent = 'Show Panoramic';
 
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function () {
           const isGrid = document.body.classList.toggle('grid-mode');
           btn.textContent = isGrid ? 'Show Panoramic' : 'Toggle Grid';
         });
