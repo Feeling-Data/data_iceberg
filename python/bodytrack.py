@@ -28,11 +28,13 @@ window_name = "Tracking"
 cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE | cv2.WINDOW_GUI_EXPANDED)
 
 pool = IdPool(12,2)
-
+frame_count = 0
 # Loop through the video frames
 while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE)>=1:
     # Read a frame from the video
     success, frame = cap.read()
+    frame_count += 1
+
     # Define the polygon points
     polygon_points = np.array([[509, 335], [531, 441], [149, 830], [63, 707]], np.int32)
     polygon_points = polygon_points.reshape((-1, 1, 2))
@@ -68,20 +70,23 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
             x1,y1,x2,y2=detection
             center_x = ( x1 + x2 ) / 2
             center_y = ( y1 + y2 ) / 2
-            print(f"Center: ({center_x*width:.1f}, {center_y*height:.1f}) Confidence: {conf:.2f} Track ID: {track_id}")
+            # print(f"Center: ({center_x*width:.1f}, {center_y*height:.1f}) Confidence: {conf:.2f} Track ID: {track_id}")
             msg = [float (center_x), float(y2), float(conf)*100, float(x2-x1), float(y2-y1)]
             id=pool.get_id(track_id)
 
             if id==None:
                 #was not able to get a new pooled id
                 continue
-            annotate_object(annotated_frame,f"id={id}",x1,y1,x2,y2)
-            osc_address = f"/person/{id}"  # OSC address pattern for each person
-            try:
-                osc_client.send_message(osc_address, msg)
-                pass
-            except OSError as e:
-                print(e)
+
+            if frame_count >= 10:
+                frame_count = 0
+                annotate_object(annotated_frame,f"id={id}",x1,y1,x2,y2)
+                osc_address = f"/person/{id}"  # OSC address pattern for each person
+                try:
+                    osc_client.send_message(osc_address, msg)
+                    pass
+                except OSError as e:
+                    print(e)
 
         annotate_fps(annotated_frame)
         # Display the annotated frame
