@@ -155,22 +155,44 @@ const FISHEYE_CORRECTION = () => (typeof window !== 'undefined' && window.FISHEY
 
 /**
  * Corrects for fish-eye lens distortion
- * Fish-eye distortion compresses edges, so we need to expand them
+ * Symptoms: center is too sensitive (small movements = large bar changes)
+ *           edges are less sensitive (large movements = small bar changes)
+ * Solution: compress center movements (reduce sensitivity), expand edge movements (increase sensitivity)
  * @param {number} normalizedX - Normalized position (0-1) from camera
  * @returns {number} - Corrected normalized position (0-1)
  */
 function correctFisheyeDistortion(normalizedX) {
   // Center the coordinate around 0.5 (center of image)
   const centered = normalizedX - 0.5;
-
-  // Apply polynomial correction for fish-eye distortion
-  // Fish-eye compresses edges toward center, so we expand them away from center
-  // Higher correction values = more expansion at edges
   const correctionFactor = FISHEYE_CORRECTION();
-  const correction = centered * (1 + correctionFactor * centered * centered);
+
+  // Apply a correction that:
+  // - Makes center LESS sensitive (compresses center movements)
+  // - Makes edges MORE sensitive (expands edge movements)
+  const absCentered = Math.abs(centered);
+  const sign = centered >= 0 ? 1 : -1;
+
+  // Use inverse power curve: invert the distance from center, then apply power
+  // When absCentered is small (center): use power > 1 to compress (inverse of small = large, then power > 1 compresses large)
+  // When absCentered is large (edges): use power < 1 to expand (inverse of large = small, then power < 1 expands small)
+  // Actually, simpler: use the inverse of the distance, then apply varying power
+  // Or even simpler: apply a scaling factor that varies with distance
+  // Small absCentered -> smaller scale factor (compresses)
+  // Large absCentered -> larger scale factor (expands)
+  const normalizedDistance = absCentered * 2; // 0 to 1
+  // Scale factor: 0 at center -> 1 - correctionFactor (compresses), 1 at edge -> 1 + correctionFactor (expands)
+  const scaleFactor = 1 + correctionFactor * (2 * normalizedDistance - 1);
+
+  // Apply scaling: multiply centered value by scale factor
+  // At center (normalizedDistance = 0): scaleFactor < 1 (compresses)
+  // At edge (normalizedDistance = 1): scaleFactor > 1 (expands)
+  const corrected = centered * scaleFactor;
+
+  // Clamp to valid range
+  const clamped = Math.max(-0.5, Math.min(0.5, corrected));
 
   // Return to 0-1 range
-  return 0.5 + correction;
+  return 0.5 + clamped;
 }
 
 // Initialize tracking data for a person
