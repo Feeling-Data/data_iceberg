@@ -145,6 +145,34 @@ const NOSE_MOVE_THRESHOLD = 1; // Lower threshold for more responsive updates
 const MAX_MISSING_FRAMES = 5;
 const MIN_CONFIDENCE = 0.5; // Minimum confidence threshold
 
+// Fish-eye distortion correction
+// Adjust this value to correct for lens distortion (0 = no correction, higher = more correction)
+// Typical values: 0.2-0.6 for moderate fish-eye, 0.6-1.0 for strong fish-eye
+// Expose to window for easy calibration adjustment
+window.FISHEYE_CORRECTION = 0.4; // Start with moderate correction, adjust based on testing
+const FISHEYE_CORRECTION = () => (typeof window !== 'undefined' && window.FISHEYE_CORRECTION !== undefined)
+  ? window.FISHEYE_CORRECTION : 0.4;
+
+/**
+ * Corrects for fish-eye lens distortion
+ * Fish-eye distortion compresses edges, so we need to expand them
+ * @param {number} normalizedX - Normalized position (0-1) from camera
+ * @returns {number} - Corrected normalized position (0-1)
+ */
+function correctFisheyeDistortion(normalizedX) {
+  // Center the coordinate around 0.5 (center of image)
+  const centered = normalizedX - 0.5;
+
+  // Apply polynomial correction for fish-eye distortion
+  // Fish-eye compresses edges toward center, so we expand them away from center
+  // Higher correction values = more expansion at edges
+  const correctionFactor = FISHEYE_CORRECTION();
+  const correction = centered * (1 + correctionFactor * centered * centered);
+
+  // Return to 0-1 range
+  return 0.5 + correction;
+}
+
 // Initialize tracking data for a person
 function initPersonData(personId) {
   if (!personData.has(personId)) {
@@ -293,21 +321,36 @@ function processPersonData(displayPersonId, centerX, confidence, width, height) 
   // Detect if values are normalized (0-1) or pixel values
   // If width is less than 1, assume normalized coordinates
   if (width < 1 && centerX <= 1) {
-    // Camera gives values 0-1, but we only accept points in 0.2-0.8 range
-    // Values outside this range are clamped to the boundaries
+    // Camera gives values 0-1, but we only accept points from 0.15 to 1.0
+    // The center of this range (0.575) should map to the center of the timeline
     const CAMERA_MIN = 0.15;
-    const CAMERA_MAX = 1;
+    const CAMERA_MAX = 1.0;
 
-    // Only accept values in the 0.2-0.8 range (clamp to boundaries if outside)
-    const clampedCenterX = Math.max(CAMERA_MIN, Math.min(CAMERA_MAX, centerX));
+    // Clamp to valid camera range
+    let clampedCenterX = Math.max(CAMERA_MIN, Math.min(CAMERA_MAX, centerX));
 
-    // Remap from room range [0.2, 0.8] to full timeline range [0, 1]
-    // This ensures the usable room space maps to the entire timeline
-    const remappedCenterX = (clampedCenterX - CAMERA_MIN) / (CAMERA_MAX - CAMERA_MIN);
+    // Apply fish-eye distortion correction before mapping
+    // This corrects for lens distortion that compresses edges
+    clampedCenterX = correctFisheyeDistortion(clampedCenterX);
 
-    // Convert remapped value (0-1) to pixel range for timeline
-    // remappedCenterX of 0.0 means start of timeline (0px), 1.0 means end (200px)
-    normalizedCenterX = remappedCenterX * vWidth;
+    // Re-clamp after distortion correction (correction might push values slightly outside bounds)
+    clampedCenterX = Math.max(CAMERA_MIN, Math.min(CAMERA_MAX, clampedCenterX));
+
+    // Calculate the center of the camera range after distortion correction
+    const CAMERA_CENTER = (CAMERA_MIN + CAMERA_MAX) / 2; // 0.575
+
+    // Map camera range [0.15, 1.0] linearly to normalized timeline range [0, 1]
+    // This ensures proportional mapping: camera center (0.575) -> timeline center (0.5)
+    const cameraRange = CAMERA_MAX - CAMERA_MIN; // 0.85
+    const normalizedPercent = (clampedCenterX - CAMERA_MIN) / cameraRange;
+
+    // Clamp to ensure we stay within [0, 1] range
+    const clampedPercent = Math.max(0, Math.min(1, normalizedPercent));
+
+    // Convert normalized value (0-1) to pixel range for timeline
+    // This will be further processed by timeline.js with curve and inversion
+    // clampedPercent of 0.0 means start of timeline (0px), 1.0 means end (200px)
+    normalizedCenterX = clampedPercent * vWidth;
   } else if (width > 0 && width > 1) {
     // Values are in pixels, normalize using width
     normalizedCenterX = (centerX / width) * vWidth;
