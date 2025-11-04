@@ -488,6 +488,11 @@ function checkForTimelineChanges() {
 }
 
 function animate(currentTime) {
+  // Track FPS for performance monitoring
+  if (typeof window.updateFPS === 'function') {
+    window.updateFPS();
+  }
+  
   // Frame rate limiting for better performance
   if (currentTime - lastFrameTime < frameInterval) {
     requestAnimationFrame(animate);
@@ -627,14 +632,15 @@ function drawPixelatedNoise() {
   const xAxisY = getXAxisPosition();
   const waveEndY = Math.min(oceanCanvas.height, xAxisY + 425); // Taller ocean - 250px below
 
-  // Use smaller step size for smoother wave edge
-  const step = window.pixelSize / 2; // Half-size steps for smoother rendering
+  // Optimize: Use full pixel size for step (no half-size) for better performance
+  const step = window.pixelSize; // Full-size steps for faster rendering
+
+  // Pre-calculate common values outside loops
+  const hasActiveRipples = ripples.length > 0;
+  const antiAliasHeight = window.pixelSize * 3; // Reduced from 4 for performance
 
   for (let x = 0; x < oceanCanvas.width; x += window.pixelSize) {
     let waveY = getJaggedWaveY(x);
-
-    // Extended anti-aliasing zone for smoother transition
-    const antiAliasHeight = window.pixelSize * 4;
     const smoothStart = waveY - antiAliasHeight;
 
     // Draw from above the wave edge with smooth transition
@@ -642,25 +648,25 @@ function drawPixelatedNoise() {
       // Calculate alpha for smooth edge transition
       let alpha = 1.0;
       if (y < waveY) {
-        // Smooth fade-in at the wave edge with cubic easing for even smoother transition
+        // Smooth fade-in at the wave edge
         const distFromEdge = waveY - y;
         const normalizedDist = distFromEdge / antiAliasHeight;
-        alpha = 1 - Math.pow(normalizedDist, 0.7); // Smoother curve
+        alpha = 1 - Math.pow(normalizedDist, 0.7);
         alpha = Math.max(0, Math.min(1, alpha));
       }
 
       // Only draw if alpha is meaningful
       if (alpha > 0.05) {
-        drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha);
+        drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha, hasActiveRipples);
       }
     }
   }
 }
 
-function drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha) {
+function drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha, hasActiveRipples) {
   // Calculate ripple effect on this pixel (optimized)
   let rippleOffset = 0;
-  if (ripples.length > 0) {
+  if (hasActiveRipples) {
     for (let ripple of ripples) {
       // Skip distant ripples for performance - use squared distance to avoid sqrt
       const dx = x - ripple.x;
@@ -681,90 +687,47 @@ function drawOceanPixel(x, y, waveY, xAxisY, waveEndY, alpha) {
   let displayX = x + Math.cos(rippleOffset * 0.1) * rippleOffset * 0.5;
   let displayY = y + Math.sin(rippleOffset * 0.1) * rippleOffset * 0.5;
 
-  // Dynamic pixel size with subtle variation - cache calculations for performance
+  // Simplified dynamic pixel size - less computation
   let dynamicPixelSize = window.pixelSize;
 
-  // Cache common trigonometric calculations
-  const xTime1 = x * 0.03 + time * 2;
-  const yTime1 = y * 0.02 + time * 1.5;
-  const combinedTime1 = time * 4 + x * 0.01;
-
-  if (hasRippleEffect) {
-    // More dramatic size variation when ripples are present
-    let sizeVariation = Math.sin(xTime1) * 2 +
-      Math.cos(yTime1) * 1.5 +
-      Math.sin(combinedTime1) * 1;
-
-    // Add ripple effect to size variation
-    sizeVariation += Math.abs(rippleOffset) * 0.2;
-    dynamicPixelSize += sizeVariation;
-  } else {
-    // Subtle variation for calm ocean
-    let sizeVariation1 = Math.sin(x * 0.015 + time * 0.4) * 0.3;
-    let sizeVariation2 = Math.cos(y * 0.012 + time * 0.3) * 0.2;
-    dynamicPixelSize += sizeVariation1 + sizeVariation2;
-  }
-
-  dynamicPixelSize = Math.max(4, Math.min(12, dynamicPixelSize));
-
-  // ACTIVE MORPHING PATTERNS - Large scale shifting across the ocean (cached for performance)
+  // Simplified morphing patterns - reduced trigonometric calls
   const morphX = x * window.morphScale + time * window.morphSpeed;
   const morphY = y * window.morphScale * 0.8 + time * window.morphSpeed * 0.7;
-  const morphXY = (x + y) * window.morphScale * 0.5 + time * window.morphSpeed * 0.5;
-  const morphXYDiff = (x - y) * window.morphScale * 0.6 + time * window.morphSpeed * 0.8;
 
   let morphPattern1 = Math.sin(morphX) * Math.cos(morphY);
-  let morphPattern2 = Math.sin(morphXY) * Math.cos(morphXYDiff);
 
-  // Combine patterns for complex movement
-  let morphValue = (morphPattern1 + morphPattern2) / 2;
+  // Combine patterns for complex movement (simplified)
+  let morphValue = morphPattern1 * 0.5;
 
   // Static noise that shifts with the morphing patterns - SUBTLE range
-  let baseStaticIntensity = hasRippleEffect ? 0.3 : 0.04; // Lower base for calm
+  let baseStaticIntensity = hasRippleEffect ? 0.3 : 0.04;
   let morphingStaticIntensity = baseStaticIntensity + (morphValue * window.staticShiftAmount);
 
   let staticNoise = hasRippleEffect ?
     (Math.random() * 0.4 + 0.8) :
-    // Compress the range for subtle variation: instead of 0-1, use 0.92-1.04
     (Math.random() * morphingStaticIntensity * 0.6 + (1 - morphingStaticIntensity * 0.3));
 
-  // Noise layers for additional texture
-  let noiseVal1 = Math.sin(x * 0.02 + time * 0.5) * Math.cos(y * 0.015 + time * 0.4) * Math.sin(time * 0.8);
-  let noiseVal2 = Math.sin(x * 0.01 + time * 0.3) * Math.cos(y * 0.012 + time * 0.6) * Math.sin(time * 0.5);
-
-  let noiseVal = (noiseVal1 + noiseVal2 * 0.6) / 1.6;
+  // Simplified noise layers
+  let noiseVal = Math.sin(x * 0.02 + time * 0.5) * Math.cos(y * 0.015 + time * 0.4) * 0.5;
 
   // Scale noise based on ripple presence
   if (!hasRippleEffect) {
-    noiseVal *= 0.3; // Subtle when calm
+    noiseVal *= 0.3;
   }
 
   // Ocean depth affects color (only below wave)
   let depthFactor = (y - waveY) / (oceanCanvas.height - waveY);
 
-  // SHIFTING COLOR BANDS - Diagonal bands that move across the ocean
-  let bandAngle = time * window.bandSpeed; // Rotating angle
-  let bandX = Math.cos(bandAngle);
-  let bandY = Math.sin(bandAngle);
-  let bandPosition = (x / oceanCanvas.width) * bandX + ((y - waveY) / oceanCanvas.height) * bandY;
-  let bandPattern = Math.sin(bandPosition * Math.PI * 4 + time * window.bandSpeed * 2);
-
-  // Create visible color shifts from the bands
+  // Simplified color band calculation
+  let bandPattern = Math.sin((x / oceanCanvas.width + time * window.bandSpeed) * Math.PI * 4);
   let colorBandEffect = bandPattern * window.bandIntensity;
-
-  // Add morphing pattern to create flowing effect
   let flowingColor = morphValue * window.bandIntensity * 0.8;
 
-  // Below water - deeper blues with more variation near the jagged edge
-  let edgeProximity = Math.max(0, 1 - (y - waveY) / 20); // How close to the jagged edge
-  let edgeVariation = edgeProximity * (hasRippleEffect ? 15 : 5); // Less variation when calm
+  // Simplified edge variation
+  let edgeProximity = Math.max(0, 1 - (y - waveY) / 20);
+  let randomVariation = hasRippleEffect ? (Math.random() - 0.5) * (10 + edgeProximity * 15) : 0;
 
-  // Keep colors in blue range - eliminate black pixels in calm areas
-  let randomVariation = hasRippleEffect ?
-    (Math.random() - 0.5) * (10 + edgeVariation) : // Normal variation with ripples
-    0; // No random variation in calm areas to prevent black pixels
-
-  // Base colors with band and morphing effects applied
+  // Base colors with simplified effects
   let r = 5 + depthFactor * 15 + noiseVal * 10 + randomVariation + colorBandEffect * 0.3 + flowingColor;
   let g = 15 + depthFactor * 25 + noiseVal * 15 + randomVariation * 1.2 + colorBandEffect * 0.6 + flowingColor * 1.2;
   let b = 35 + depthFactor * 50 + noiseVal * 20 + randomVariation * 1.5 + colorBandEffect + flowingColor * 0.8;

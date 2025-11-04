@@ -16,7 +16,7 @@ function getVideoWidth() {
 // Enhanced exponential moving average smoothing for more responsive feel
 const EMA_ALPHA = 0.4; // Smoothing factor (0-1): increased from 0.3 for faster response
 let smoothedMarkerX = null;
-const MARKER_MOVE_THRESHOLD = 0.005; // Reduced threshold for more responsive updates (in videoWidth units)
+const MARKER_MOVE_THRESHOLD = 0.5; // Threshold for movement detection (in videoWidth units, ~0.25% of range for fine detail)
 
 // Velocity tracking for intelligent throttling
 let lastMarkerX = null;
@@ -36,6 +36,39 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// FPS tracking for performance monitoring
+let fpsFrameCount = 0;
+let fpsLastTime = performance.now();
+let currentFPS = 0;
+let fpsHistory = [];
+const FPS_HISTORY_LENGTH = 30; // Track last 30 FPS readings for smoothing
+
+// Update FPS counter
+function updateFPS() {
+  fpsFrameCount++;
+  const now = performance.now();
+  const elapsed = now - fpsLastTime;
+  
+  if (elapsed >= 1000) { // Update every second
+    currentFPS = Math.round((fpsFrameCount * 1000) / elapsed);
+    fpsHistory.push(currentFPS);
+    if (fpsHistory.length > FPS_HISTORY_LENGTH) {
+      fpsHistory.shift();
+    }
+    fpsFrameCount = 0;
+    fpsLastTime = now;
+  }
+}
+
+// Get average FPS from history
+function getAverageFPS() {
+  if (fpsHistory.length === 0) return 0;
+  return Math.round(fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length);
+}
+
+// Expose FPS tracking to ocean generative
+window.updateFPS = updateFPS;
+
 // Debug display update
 function updateDebugDisplay() {
   if (typeof document === 'undefined') return;
@@ -47,6 +80,25 @@ function updateDebugDisplay() {
   if (!personsDiv) return;
   
   personsDiv.innerHTML = '';
+  
+  // Show performance metrics
+  const perfDiv = document.createElement('div');
+  perfDiv.style.marginTop = '10px';
+  perfDiv.style.borderTop = '1px solid rgba(255,255,255,0.1)';
+  perfDiv.style.paddingTop = '8px';
+  perfDiv.innerHTML = `<div style="color: rgba(100,200,255,1); font-size: 11px; margin-bottom: 5px;">Performance:</div>`;
+  personsDiv.appendChild(perfDiv);
+  
+  const fpsDiv = document.createElement('div');
+  fpsDiv.className = 'debug-row';
+  fpsDiv.style.marginLeft = '10px';
+  const avgFPS = getAverageFPS();
+  const fpsColor = currentFPS >= 25 ? '#00ff00' : currentFPS >= 15 ? '#ffaa00' : '#ff0000';
+  fpsDiv.innerHTML = `
+    <div><span class="debug-label">Current FPS:</span> <span class="debug-value" style="color: ${fpsColor};">${currentFPS}</span></div>
+    <div><span class="debug-label">Average FPS:</span> <span class="debug-value">${avgFPS}</span></div>
+  `;
+  personsDiv.appendChild(fpsDiv);
   
   // Show marker status
   const markerDiv = document.createElement('div');
