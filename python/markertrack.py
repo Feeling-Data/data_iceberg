@@ -463,7 +463,7 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
                 
                     # Draw the marker on the frame (always show visual feedback)
                     # Only draw the target marker, not all detected markers
-                    aruco.drawDetectedMarkers(annotated_frame, [corners[target_marker_index]], [ids[target_marker_index]])
+                    aruco.drawDetectedMarkers(annotated_frame, [corners[target_marker_index]], np.array([[ids[target_marker_index][0]]]))
                     
                     # Draw centroid
                     cv2.circle(annotated_frame, (cX, cY), 5, (255, 0, 255), -1)
