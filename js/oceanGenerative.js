@@ -42,13 +42,13 @@ let isSettled = false;
 let lastRippleX = null;
 let lastRippleY = null;
 let currentPulseInterval = 3000; // Dynamic pulse interval based on ripple size
-const SETTLE_DELAY = 400; // Wait 400ms before considering "settled"
+const SETTLE_DELAY = 200; // Wait 200ms before considering "settled" (reduced from 400ms)
 
 // Movement-based settling: track recent positions to detect when person has settled
 let recentPositions = [];
-const SETTLE_DETECTION_WINDOW = 20; // Number of recent positions to track
-const SETTLE_THRESHOLD = 5; // Maximum distance between positions to consider "settled"
-const MOVEMENT_THRESHOLD = 3; // Minimum movement to consider as "moved" (ignores small noise)
+const SETTLE_DETECTION_WINDOW = 8; // Number of recent positions to track (reduced from 20 for faster detection)
+const SETTLE_THRESHOLD = 3; // Maximum distance between positions to consider "settled" (reduced from 5)
+const MOVEMENT_THRESHOLD = 2; // Minimum movement to consider as "moved" (reduced from 3)
 
 // Performance optimization
 let lastFrameTime = 0;
