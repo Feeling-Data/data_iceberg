@@ -235,10 +235,42 @@ def run_calibration_wizard(cap, width, height, detector):
 capture_source = 0  # Use the default camera
 cap = cv2.VideoCapture(capture_source)
 
-# Get the resolution of the video capture
+# GoPro camera configuration fixes
+# Set backend and buffering to improve reliability
+cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffer to get latest frames
+cap.set(cv2.CAP_PROP_FPS, 30)  # Request 30fps
+
+# Try to set a reasonable resolution if camera supports it
+# This helps with some cameras that don't initialize properly
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+
+# Give camera time to initialize
+print("Initializing camera...")
+time.sleep(1)
+
+# Flush initial frames (sometimes first frames are black)
+for _ in range(5):
+    cap.read()
+
+# Get the actual resolution of the video capture
 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-print(f"Resolution: {width}x{height}")
+fps = cap.get(cv2.CAP_PROP_FPS)
+print(f"Resolution: {width}x{height} @ {fps}fps")
+
+# Verify camera is actually working
+success, test_frame = cap.read()
+if not success or test_frame is None:
+    print("ERROR: Could not read from camera!")
+    print("Please check:")
+    print("  1. Camera is connected")
+    print("  2. Camera permissions are granted")
+    print("  3. No other app is using the camera")
+    cap.release()
+    exit(1)
+else:
+    print("Camera initialized successfully!")
 
 # Set up the OSC client
 osc_client = udp_client.SimpleUDPClient("127.0.0.1", 6448)  # Sending to localhost on port 6448
