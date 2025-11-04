@@ -15,7 +15,7 @@ MARKER_DICT = aruco.DICT_ARUCO_ORIGINAL  # ArUco dictionary to use
 # Specific marker ID to track (set to None to track any marker)
 # If you want to track only marker ID 42, set: TARGET_MARKER_ID = 42
 # To see which marker ID you have, run the script and look at the display
-TARGET_MARKER_ID = None  # Set to specific ID (e.g., 0, 1, 2...) or None for any marker
+TARGET_MARKER_ID = 5  # Set to specific ID (e.g., 0, 1, 2...) or None for any marker
 
 # *** Calibration file ***
 CALIBRATION_FILE = "camera_calibration.json"
