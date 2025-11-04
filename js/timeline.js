@@ -760,7 +760,7 @@ function updateVisibleDataInternal(noseX, personId = 1, simplified = false) {
         return (d >= from && d <= to) ? "900" : "400"; // Extra bold when highlighted
       })
       .style("font-size", function(d) {
-        return (d >= from && d <= to) ? "24px" : "16px"; // Larger size when highlighted
+        return (d >= from && d <= to) ? "24px" : null; // Larger ONLY when highlighted, null preserves default
       })
       .style("text-shadow", function(d) {
         return (d >= from && d <= to) ? "0 0 10px rgba(255,255,255,0.8)" : "none"; // Glow effect
