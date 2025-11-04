@@ -634,10 +634,10 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
 
 // Enhanced update throttling and movement detection
 let lastUpdateTime = 0;
-const UPDATE_THROTTLE_MS = 100; // Increased from 50ms to 100ms for smoother feel (10 updates/sec)
+const UPDATE_THROTTLE_MS = 50; // Reduced from 100ms to 50ms for more responsive updates (20 updates/sec)
 let isMoving = false;
 let movementSettleTimeout = null;
-const MOVEMENT_SETTLE_DELAY = 400; // Time to wait before considering "settled"
+const MOVEMENT_SETTLE_DELAY = 200; // Time to wait before considering "settled" (reduced from 400ms)
 let lastNoseXForMovement = null;
 
 // Interpolation state for smooth transitions

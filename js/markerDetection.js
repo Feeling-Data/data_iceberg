@@ -14,9 +14,9 @@ function getVideoWidth() {
 }
 
 // Enhanced exponential moving average smoothing for more responsive feel
-const EMA_ALPHA = 0.3; // Smoothing factor (0-1): lower = smoother, higher = more responsive
+const EMA_ALPHA = 0.4; // Smoothing factor (0-1): increased from 0.3 for faster response
 let smoothedMarkerX = null;
-const MARKER_MOVE_THRESHOLD = 0.3; // Reduced threshold for more responsive updates (in videoWidth units)
+const MARKER_MOVE_THRESHOLD = 0.2; // Reduced threshold for more responsive updates (in videoWidth units)
 
 // Velocity tracking for intelligent throttling
 let lastMarkerX = null;
@@ -134,13 +134,13 @@ function processMarkerPosition(normalizedX) {
   
   // Velocity-based throttling: fast movement = less frequent updates (smoother)
   // Slow movement = more frequent updates (responsive)
-  let throttleMs = 50; // Base throttle
+  let throttleMs = 30; // Base throttle (reduced from 50ms)
   if (velocity > 5) {
-    throttleMs = 150; // Fast movement: update less often
+    throttleMs = 100; // Fast movement: update less often (reduced from 150ms)
   } else if (velocity > 2) {
-    throttleMs = 100; // Medium movement
+    throttleMs = 60; // Medium movement (reduced from 100ms)
   } else {
-    throttleMs = 50; // Slow/fine movement: update more often
+    throttleMs = 30; // Slow/fine movement: update more often (reduced from 50ms)
   }
   
   // Check if enough time has passed based on velocity
