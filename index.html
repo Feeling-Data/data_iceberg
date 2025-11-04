@@ -415,7 +415,7 @@
 
     <!-- Debug Panel -->
     <div id="debug-panel" style="display: block;">
-      <h4>Body Tracking Debug</h4>
+      <h4>Marker Tracking Debug</h4>
       <div class="debug-row">
         <span class="debug-status disconnected" id="debug-status"></span>
         <span class="debug-label">Connection:</span>
@@ -664,12 +664,19 @@
         const btn = document.getElementById('toggle-debug-btn');
         if (panel.style.display === 'none') {
           panel.style.display = 'block';
-          btn.textContent = '✕ Hide Debug';
+          if (btn) btn.textContent = '✕ Hide Debug';
         } else {
           panel.style.display = 'none';
-          btn.textContent = '🔍 Debug';
+          if (btn) btn.textContent = '🔍 Debug';
         }
       }
+
+      // Keyboard shortcut to toggle debug with 'd' key
+      document.addEventListener('keydown', function(event) {
+        if (event.key === 'd' || event.key === 'D') {
+          toggleDebug();
+        }
+      });
     </script>
 
     <!-- <button onclick="goFullScreen()">fullpage</button> -->
