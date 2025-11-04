@@ -161,6 +161,27 @@ if (typeof window !== 'undefined') {
   setInterval(updateDebugDisplay, 500);
 }
 
+// Async update queue using requestAnimationFrame
+let pendingUpdate = null;
+let updateScheduled = false;
+
+function scheduleVisualizationUpdate(markerX, personId) {
+  // Store the latest position
+  pendingUpdate = { markerX, personId };
+  
+  // Only schedule one update per animation frame
+  if (!updateScheduled) {
+    updateScheduled = true;
+    requestAnimationFrame(() => {
+      updateScheduled = false;
+      if (pendingUpdate && typeof updateVisibleData === 'function') {
+        updateVisibleData(pendingUpdate.markerX, pendingUpdate.personId);
+        pendingUpdate = null;
+      }
+    });
+  }
+}
+
 // Process marker position from OSC
 function processMarkerPosition(normalizedX) {
   const now = Date.now();
@@ -184,15 +205,12 @@ function processMarkerPosition(normalizedX) {
   const velocity = lastMarkerX !== null ? Math.abs(smoothedMarkerX - lastMarkerX) : 0;
   const timeSinceLastUpdate = now - lastMarkerUpdateTimeInternal;
   
-  // Velocity-based throttling: fast movement = less frequent updates (smoother)
-  // Slow movement = more frequent updates (responsive)
-  let throttleMs = 30; // Base throttle (reduced from 50ms)
+  // Relaxed throttling - let requestAnimationFrame do most of the work
+  let throttleMs = 16; // ~60fps max (one animation frame)
   if (velocity > 5) {
-    throttleMs = 100; // Fast movement: update less often (reduced from 150ms)
+    throttleMs = 33; // ~30fps for fast movement
   } else if (velocity > 2) {
-    throttleMs = 60; // Medium movement (reduced from 100ms)
-  } else {
-    throttleMs = 30; // Slow/fine movement: update more often (reduced from 50ms)
+    throttleMs = 20; // ~50fps for medium movement
   }
   
   // Check if enough time has passed based on velocity
@@ -210,10 +228,8 @@ function processMarkerPosition(normalizedX) {
       window.stopPulsing(1);
     }
     
-    // Update visualization
-    if (typeof updateVisibleData === 'function') {
-      updateVisibleData(window.markerX, 1);
-    }
+    // Schedule async visualization update (doesn't block OSC handling)
+    scheduleVisualizationUpdate(window.markerX, 1);
   }
 }
 
@@ -280,10 +296,8 @@ function selectRandomDate() {
   
   window.markerX = randomX;
   
-  // Update visualization
-  if (typeof updateVisibleData === 'function') {
-    updateVisibleData(randomX, 1);
-  }
+  // Use async update queue for consistency
+  scheduleVisualizationUpdate(randomX, 1);
   
   // Create ripple and start pulsing after timeline updates
   setTimeout(() => {
