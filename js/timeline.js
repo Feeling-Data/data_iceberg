@@ -753,17 +753,13 @@ function updateVisibleDataInternal(noseX, personId = 1, simplified = false) {
     
     // Enhanced axis label highlighting during movement - make it VERY visible
     g.selectAll(".x-axis .tick text")
-      .style("fill", function(d) {
-        return (d >= from && d <= to) ? "#FFF" : "rgba(255,255,255,0.5)";
-      })
-      .style("font-weight", function(d) {
-        return (d >= from && d <= to) ? "900" : "400"; // Extra bold when highlighted
-      })
-      .style("font-size", function(d) {
-        return (d >= from && d <= to) ? "24px" : null; // Larger ONLY when highlighted, null preserves default
-      })
-      .style("text-shadow", function(d) {
-        return (d >= from && d <= to) ? "0 0 10px rgba(255,255,255,0.8)" : "none"; // Glow effect
+      .each(function(d) {
+        const isHighlighted = (d >= from && d <= to);
+        d3.select(this)
+          .style("fill", isHighlighted ? "#FFF" : "rgba(255,255,255,0.5)")
+          .style("font-weight", isHighlighted ? "900" : "400")
+          .style("font-size", isHighlighted ? "24px" : "16px") // Explicitly set both states
+          .style("text-shadow", isHighlighted ? "0 0 10px rgba(255,255,255,0.8)" : "none");
       });
     
     // Update data count for ripples but DON'T render any bars during movement
@@ -830,13 +826,15 @@ function updateVisibleDataInternal(noseX, personId = 1, simplified = false) {
     .style("text-anchor", "end")
     .style("fill", "rgba(255,255,255,0.5)"); // Default faded color
 
-  // Highlight ticks in the visible range
+  // Highlight ticks in the visible range with enhanced styling (matching movement mode)
   xAxisG.selectAll(".tick text")
     .filter(function (d) {
       return d >= from && d <= to;
     })
     .style("fill", "#FFF")
-    .style("font-weight", "700");
+    .style("font-weight", "900")
+    .style("font-size", "24px")
+    .style("text-shadow", "0 0 10px rgba(255,255,255,0.8)");
 
 
   // Filter data based on this person's specific time window
