@@ -637,7 +637,7 @@ let lastUpdateTime = 0;
 const UPDATE_THROTTLE_MS = 50; // Reduced from 100ms to 50ms for more responsive updates (20 updates/sec)
 let isMoving = false;
 let movementSettleTimeout = null;
-const MOVEMENT_SETTLE_DELAY = 200; // Time to wait before considering "settled" (reduced from 400ms)
+const MOVEMENT_SETTLE_DELAY = 500; // Time to wait before considering "settled" (reduced from 400ms)
 let lastNoseXForMovement = null;
 
 // Interpolation state for smooth transitions
@@ -649,6 +649,9 @@ let interpolationState = {
   duration: 200 // Smooth transition duration in ms
 };
 
+// Cache for avoiding redundant work
+let lastCalculatedWindow = { from: null, to: null, noseX: null, centerTimeRaw: null };
+
 function updateVisibleData(noseX, personId = 1) {
   // Throttle to prevent excessive updates
   const now = Date.now();
@@ -659,6 +662,14 @@ function updateVisibleData(noseX, personId = 1) {
   }
 
   lastUpdateTime = now;
+  
+  // Quick check: if position hasn't changed enough, skip expensive recalculation
+  if (lastCalculatedWindow.noseX !== null && 
+      noseX !== null &&
+      Math.abs(noseX - lastCalculatedWindow.noseX) < 1.0) {
+    // Position change is too small to change the visible window, skip update
+    return;
+  }
   
   // Detect movement for intelligent rendering
   if (noseX !== null && noseX !== undefined) {
@@ -681,6 +692,7 @@ function updateVisibleData(noseX, personId = 1) {
       movementSettleTimeout = setTimeout(() => {
         isMoving = false;
         // Trigger full redraw with animations when settled
+        lastCalculatedWindow = { from: null, to: null, noseX: null, centerTimeRaw: null }; // Force recalc
         updateVisibleDataInternal(noseX, personId, false);
       }, MOVEMENT_SETTLE_DELAY);
     }
@@ -696,24 +708,6 @@ function updateVisibleDataInternal(noseX, personId = 1, simplified = false) {
     return;
   }
 
-  // Clear animations only when doing full render
-  if (!simplified) {
-    clearPersonAnimations(personId);
-  }
-
-  // Smart redraw: store previous state to detect changes
-  const previousBars = new Set();
-  g.selectAll(`.person-${personId}`).each(function() {
-    const el = d3.select(this);
-    const dataKey = el.attr('data-key');
-    if (dataKey) {
-      previousBars.add(dataKey);
-    }
-  });
-
-  // Remove old bars (smart removal - only what's not needed)
-  g.selectAll(`.person-${personId}`).remove();
-
   // Calculate time window based on the specific person's position
   let from = startDate, to = endDate;
   let centerTimeRaw = null;
@@ -724,15 +718,13 @@ function updateVisibleDataInternal(noseX, personId = 1, simplified = false) {
     // Map noseX to percentage of video width (0 to 1)
     const rawPercent = Math.min(Math.max(noseX / videoWidth, 0), 1);
 
-    // Apply power curve to reduce sensitivity: smaller movements = smaller changes
-    // Using a power < 1.0 makes the curve less steep (less sensitive)
-    // This still maps 0->0 and 1->1, so full range is maintained
+    // Apply power curve to reduce sensitivity
     const curvedPercent = Math.pow(rawPercent, DATE_SENSITIVITY_CURVE);
 
     // Invert (left = end of timeline, right = start)
     const percent = 1 - curvedPercent;
 
-    // Always use 1 month window - never show wider window
+    // Always use 1 month window
     const windowMonths = 1;
     const fullRange = endDate - startDate;
     centerTimeRaw = new Date(+startDate + percent * fullRange);
@@ -748,7 +740,76 @@ function updateVisibleDataInternal(noseX, personId = 1, simplified = false) {
       to = endDate;
       from = d3.timeMonth.offset(to, -windowMonths);
     }
+    
+    // Cache the calculated window
+    lastCalculatedWindow = { from, to, noseX, centerTimeRaw };
   }
+
+  // OPTIMIZATION: Skip expensive DOM operations during movement
+  if (simplified) {
+    // Remove all bars during movement - show only enhanced date labels
+    g.selectAll(`.person-${personId}`).remove();
+    g.selectAll(`.preview-bar-${personId}`).remove();
+    
+    // Enhanced axis label highlighting during movement - make it VERY visible
+    g.selectAll(".x-axis .tick text")
+      .style("fill", function(d) {
+        return (d >= from && d <= to) ? "#FFF" : "rgba(255,255,255,0.5)";
+      })
+      .style("font-weight", function(d) {
+        return (d >= from && d <= to) ? "900" : "400"; // Extra bold when highlighted
+      })
+      .style("font-size", function(d) {
+        return (d >= from && d <= to) ? "24px" : "16px"; // Larger size when highlighted
+      })
+      .style("text-shadow", function(d) {
+        return (d >= from && d <= to) ? "0 0 10px rgba(255,255,255,0.8)" : "none"; // Glow effect
+      });
+    
+    // Update data count for ripples but DON'T render any bars during movement
+    const shouldShowBars = noseX !== null && noseX !== undefined && !isNaN(noseX);
+    
+    if (shouldShowBars) {
+      // Remove any preview bars from previous movements
+      g.selectAll(`.preview-bar-${personId}`).remove();
+      
+      // Update data count for ripples
+      if (centerTimeRaw) {
+        const visibleWithout = withoutLocation
+          .filter(d => d.monthObj >= from && d.monthObj <= to);
+        
+        const centerMonth = new Date(centerTimeRaw.getFullYear(), centerTimeRaw.getMonth(), 1);
+        const dataAtCenter = visibleWithout.filter(d => d.monthObj.getTime() === centerMonth.getTime());
+        const totalCountAtCenter = d3.sum(dataAtCenter, d => d.count || 0);
+        
+        window.currentDataCount1 = totalCountAtCenter;
+      }
+    }
+    
+    return; // Skip full render during movement
+  }
+
+  // FULL RENDER (only when settled)
+  // Clear animations only when doing full render
+  clearPersonAnimations(personId);
+
+  // Remove preview bars before full render
+  g.selectAll(`.preview-bar-${personId}`).remove();
+
+  // Smart redraw: store previous state to detect changes
+  const previousBars = new Set();
+  g.selectAll(`.person-${personId}`).each(function() {
+    const el = d3.select(this);
+    const dataKey = el.attr('data-key');
+    if (dataKey) {
+      previousBars.add(dataKey);
+    }
+  });
+
+  // Remove old bars (smart removal - only what's not needed)
+  g.selectAll(`.person-${personId}`).remove();
+
+  // Use cached window calculation from above (already computed in the if block at top of function)
 
   // Always remove and redraw x-axis to ensure clean state
   g.selectAll(".x-axis").remove();
