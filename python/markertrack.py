@@ -12,6 +12,11 @@ import os  # For file paths
 MARKER_SIZE_CM = 18.7  # Physical size of the marker in centimeters
 MARKER_DICT = aruco.DICT_ARUCO_ORIGINAL  # ArUco dictionary to use
 
+# Specific marker ID to track (set to None to track any marker)
+# If you want to track only marker ID 42, set: TARGET_MARKER_ID = 42
+# To see which marker ID you have, run the script and look at the display
+TARGET_MARKER_ID = None  # Set to specific ID (e.g., 0, 1, 2...) or None for any marker
+
 # *** Calibration file ***
 CALIBRATION_FILE = "camera_calibration.json"
 
@@ -286,6 +291,13 @@ cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE | cv2.WINDOW_GUI_EXPANDED)
 print("\n" + "="*60)
 print("ArUco Marker Tracking with Perspective Calibration")
 print("="*60)
+print(f"\nMarker Configuration:")
+if TARGET_MARKER_ID is None:
+    print(f"  Tracking: ANY marker from {MARKER_DICT}")
+    print(f"  (To track specific marker, set TARGET_MARKER_ID in config)")
+else:
+    print(f"  Tracking: ONLY Marker ID {TARGET_MARKER_ID}")
+    print(f"  Dictionary: {MARKER_DICT}")
 print(f"\nCurrent calibration points: {len(CALIBRATION_POINTS)} points")
 for i, (cam_x, phys_x) in enumerate(CALIBRATION_POINTS):
     print(f"  {i+1}. Camera {cam_x:.3f} -> Physical {phys_x:.2f}")
@@ -300,9 +312,15 @@ calibration_mode = False
 # Throttling configuration
 last_sent_x = None  # Last x position that was sent
 last_send_time = 0  # Last time we sent an OSC message
+last_marker_id = None  # Track which marker we're following
 MIN_CHANGE_THRESHOLD = 0.005  # Minimum change in normalized x (0.5% of screen)
 MAX_SEND_RATE = 20  # Maximum messages per second (50ms between messages)
 MIN_SEND_INTERVAL = 1.0 / MAX_SEND_RATE  # Minimum time between sends in seconds
+
+# Marker persistence settings
+MARKER_LOST_TIMEOUT = 0.5  # Seconds to wait before considering marker truly lost
+last_valid_marker_time = 0  # Last time we saw our target marker
+last_valid_position = None  # Last known valid position
 
 # Loop through the video frames
 while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
@@ -321,95 +339,162 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
         annotated_frame = frame.copy()
         
         if ids is not None and len(ids) > 0:
-            # Take the first detected marker
-            marker_corners = corners[0][0]
-            marker_id = ids[0][0]
+            # Find the target marker (either specific ID or first one detected)
+            target_marker_index = None
+            marker_id = None
             
-            # Calculate centroid using moments
-            M = cv2.moments(marker_corners)
-            if M["m00"] != 0:
-                cX = int(M["m10"] / M["m00"])
-                cY = int(M["m01"] / M["m00"])
+            if TARGET_MARKER_ID is None:
+                # Track any marker, but prefer the one we were tracking last
+                if last_marker_id is not None:
+                    # Try to find the marker we were tracking
+                    for idx, mid in enumerate(ids):
+                        if mid[0] == last_marker_id:
+                            target_marker_index = idx
+                            marker_id = mid[0]
+                            break
                 
-                # Normalize center_x to 0-1 range (raw camera view)
-                center_x_normalized = cX / width
-                center_y_normalized = cY / height
-                
-                # Apply perspective correction to map camera view to physical room position
-                center_x_corrected = apply_perspective_correction(center_x_normalized)
-                
-                # Skip if outside calibrated range
-                if center_x_corrected is None:
-                    # Outside calibrated range - show warning in annotation
-                    cv2.circle(annotated_frame, (cX, cY), 5, (0, 0, 255), -1)  # Red circle
-                    text1 = f"Marker {marker_id}"
-                    text2 = f"Raw: {center_x_normalized:.3f} - OUTSIDE CALIBRATED RANGE"
-                    cv2.putText(annotated_frame, text1, (cX - 80, cY - 35), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                    cv2.putText(annotated_frame, text2, (cX - 120, cY - 10), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-                    # Skip to next frame
-                    annotated_frame_pil = Image.fromarray(annotated_frame)
-                    annotate_fps(annotated_frame_pil)
-                    cv2.imshow(window_name, np.asarray(annotated_frame_pil))
-                    key = cv2.waitKey(1) & 0xFF
-                    if key in [27, ord('q'), ord('Q')]:
+                # If we didn't find our previous marker, take the first one
+                if target_marker_index is None:
+                    target_marker_index = 0
+                    marker_id = ids[0][0]
+            else:
+                # Track only the specific marker ID
+                for idx, mid in enumerate(ids):
+                    if mid[0] == TARGET_MARKER_ID:
+                        target_marker_index = idx
+                        marker_id = mid[0]
                         break
-                    elif key == ord('c') or key == ord('C'):
-                        print("\nStarting calibration wizard...")
-                        new_calibration = run_calibration_wizard(cap, width, height, detector)
-                        if new_calibration:
-                            CALIBRATION_POINTS = new_calibration
-                            print("Calibration updated! Resuming normal tracking...")
-                        else:
-                            print("Calibration cancelled. Resuming normal tracking...")
-                    continue
                 
-                # Throttling: only send if enough time has passed AND position changed significantly
-                current_time = time.time()
-                time_since_last_send = current_time - last_send_time
+                # If target marker not found, show message and skip
+                if target_marker_index is None:
+                    text = f"Target Marker ID {TARGET_MARKER_ID} not detected"
+                    cv2.putText(annotated_frame, text, (20, 40), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
+                    
+                    # Check if marker has been lost for too long
+                    if time.time() - last_valid_marker_time > MARKER_LOST_TIMEOUT:
+                        # Marker truly lost - could reset state here if needed
+                        pass
+            
+            # Process the target marker if found
+            if target_marker_index is not None:
+                marker_corners = corners[target_marker_index][0]
+            
+                # Update marker tracking state
+                last_marker_id = marker_id
+                last_valid_marker_time = time.time()
                 
-                should_send = False
+                # Calculate centroid using moments
+                M = cv2.moments(marker_corners)
+                if M["m00"] != 0:
+                    cX = int(M["m10"] / M["m00"])
+                    cY = int(M["m01"] / M["m00"])
                 
-                # Check if enough time has passed since last send
-                if time_since_last_send >= MIN_SEND_INTERVAL:
-                    # Check if position changed significantly (compare corrected positions)
-                    if last_sent_x is None:
-                        # First detection, always send
-                        should_send = True
-                    elif abs(center_x_corrected - last_sent_x) >= MIN_CHANGE_THRESHOLD:
-                        # Position changed enough to warrant sending
-                        should_send = True
+                    # Normalize center_x to 0-1 range (raw camera view)
+                    center_x_normalized = cX / width
+                    center_y_normalized = cY / height
+                    
+                    # Apply perspective correction to map camera view to physical room position
+                    center_x_corrected = apply_perspective_correction(center_x_normalized)
                 
-                # Send OSC message if throttling conditions are met
-                if should_send:
-                    osc_address = "/marker/x"
-                    try:
-                        # Send the CORRECTED position
-                        osc_client.send_message(osc_address, float(center_x_corrected))
-                        last_sent_x = center_x_corrected
-                        last_send_time = current_time
-                        # Optionally print for debugging
-                        # print(f"Sent: {osc_address} {center_x_corrected:.3f} (raw: {center_x_normalized:.3f})")
-                    except OSError as e:
-                        print(f"OSC Error: {e}")
+                    # Store as last valid position
+                    last_valid_position = center_x_corrected
+                    
+                    # Skip if outside calibrated range
+                    if center_x_corrected is None:
+                        # Outside calibrated range - show warning in annotation
+                        cv2.circle(annotated_frame, (cX, cY), 5, (0, 0, 255), -1)  # Red circle
+                        text1 = f"Marker {marker_id}"
+                        text2 = f"Raw: {center_x_normalized:.3f} - OUTSIDE CALIBRATED RANGE"
+                        cv2.putText(annotated_frame, text1, (cX - 80, cY - 35), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                        cv2.putText(annotated_frame, text2, (cX - 120, cY - 10), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                        # Skip to next frame
+                        annotated_frame_pil = Image.fromarray(annotated_frame)
+                        annotate_fps(annotated_frame_pil)
+                        cv2.imshow(window_name, np.asarray(annotated_frame_pil))
+                        key = cv2.waitKey(1) & 0xFF
+                        if key in [27, ord('q'), ord('Q')]:
+                            break
+                        elif key == ord('c') or key == ord('C'):
+                            print("\nStarting calibration wizard...")
+                            new_calibration = run_calibration_wizard(cap, width, height, detector)
+                            if new_calibration:
+                                CALIBRATION_POINTS = new_calibration
+                                print("Calibration updated! Resuming normal tracking...")
+                            else:
+                                print("Calibration cancelled. Resuming normal tracking...")
+                        continue
                 
-                # Draw the marker on the frame (always show visual feedback)
-                aruco.drawDetectedMarkers(annotated_frame, corners, ids)
+                    # Throttling: only send if enough time has passed AND position changed significantly
+                    # BUT: continue sending the same position if marker is still detected (keep-alive)
+                    current_time = time.time()
+                    time_since_last_send = current_time - last_send_time
+                    
+                    should_send = False
+                    
+                    # Check if enough time has passed since last send
+                    if time_since_last_send >= MIN_SEND_INTERVAL:
+                        # Check if position changed significantly (compare corrected positions)
+                        if last_sent_x is None:
+                            # First detection, always send
+                            should_send = True
+                        elif abs(center_x_corrected - last_sent_x) >= MIN_CHANGE_THRESHOLD:
+                            # Position changed enough to warrant sending
+                            should_send = True
+                        elif time_since_last_send >= (MIN_SEND_INTERVAL * 3):
+                            # Keep-alive: if marker hasn't moved but is still detected,
+                            # send periodic updates to prevent false marker from stopping transmission
+                            should_send = True
                 
-                # Draw centroid
-                cv2.circle(annotated_frame, (cX, cY), 5, (255, 0, 255), -1)
+                    # Send OSC message if throttling conditions are met
+                    if should_send:
+                        osc_address = "/marker/x"
+                        try:
+                            # Send the CORRECTED position
+                            osc_client.send_message(osc_address, float(center_x_corrected))
+                            last_sent_x = center_x_corrected
+                            last_send_time = current_time
+                            # Optionally print for debugging
+                            # print(f"Sent: {osc_address} {center_x_corrected:.3f} (raw: {center_x_normalized:.3f})")
+                        except OSError as e:
+                            print(f"OSC Error: {e}")
                 
-                # Add text annotation with both raw and corrected values
-                text1 = f"Marker {marker_id}"
-                text2 = f"Raw: {center_x_normalized:.3f} -> Corrected: {center_x_corrected:.3f}"
-                if should_send:
-                    text2 += " (SENT)"
-                
-                cv2.putText(annotated_frame, text1, (cX - 80, cY - 35), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-                cv2.putText(annotated_frame, text2, (cX - 80, cY - 10), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    # Draw the marker on the frame (always show visual feedback)
+                    # Only draw the target marker, not all detected markers
+                    aruco.drawDetectedMarkers(annotated_frame, [corners[target_marker_index]], [ids[target_marker_index]])
+                    
+                    # Draw centroid
+                    cv2.circle(annotated_frame, (cX, cY), 5, (255, 0, 255), -1)
+                    
+                    # Add text annotation with both raw and corrected values
+                    text1 = f"Marker {marker_id}"
+                    if TARGET_MARKER_ID is not None:
+                        text1 += f" (TRACKING ID {TARGET_MARKER_ID})"
+                    text2 = f"Raw: {center_x_normalized:.3f} -> Corrected: {center_x_corrected:.3f}"
+                    if should_send:
+                        text2 += " (SENT)"
+                    
+                    cv2.putText(annotated_frame, text1, (cX - 80, cY - 35), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                    cv2.putText(annotated_frame, text2, (cX - 80, cY - 10), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        
+        # Show detected but non-target markers in gray (if any)
+        if ids is not None and len(ids) > 1:
+            for idx, mid in enumerate(ids):
+                if TARGET_MARKER_ID is None or mid[0] != TARGET_MARKER_ID:
+                    # Show other markers in gray to indicate they're ignored
+                    other_corners = corners[idx][0]
+                    M_other = cv2.moments(other_corners)
+                    if M_other["m00"] != 0:
+                        cX_other = int(M_other["m10"] / M_other["m00"])
+                        cY_other = int(M_other["m01"] / M_other["m00"])
+                        cv2.circle(annotated_frame, (cX_other, cY_other), 5, (128, 128, 128), -1)
+                        cv2.putText(annotated_frame, f"ID {mid[0]} (ignored)", 
+                                   (cX_other - 50, cY_other - 20), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (128, 128, 128), 1)
         
         # Convert to PIL Image for annotate_fps
         annotated_frame_pil = Image.fromarray(annotated_frame)
