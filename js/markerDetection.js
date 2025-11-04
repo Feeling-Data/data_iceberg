@@ -16,7 +16,7 @@ function getVideoWidth() {
 // Enhanced exponential moving average smoothing for more responsive feel
 const EMA_ALPHA = 0.4; // Smoothing factor (0-1): increased from 0.3 for faster response
 let smoothedMarkerX = null;
-const MARKER_MOVE_THRESHOLD = 0.2; // Reduced threshold for more responsive updates (in videoWidth units)
+const MARKER_MOVE_THRESHOLD = 0.005; // Reduced threshold for more responsive updates (in videoWidth units)
 
 // Velocity tracking for intelligent throttling
 let lastMarkerX = null;
