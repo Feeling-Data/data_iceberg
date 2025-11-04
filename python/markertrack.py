@@ -314,7 +314,7 @@ last_sent_x = None  # Last x position that was sent
 last_send_time = 0  # Last time we sent an OSC message
 last_marker_id = None  # Track which marker we're following
 MIN_CHANGE_THRESHOLD = 0.005  # Minimum change in normalized x (0.5% of screen)
-MAX_SEND_RATE = 5  # Maximum messages per second (50ms between messages)
+MAX_SEND_RATE = 10  # Maximum messages per second (50ms between messages)
 MIN_SEND_INTERVAL = 1.0 / MAX_SEND_RATE  # Minimum time between sends in seconds
 
 # Marker persistence settings
