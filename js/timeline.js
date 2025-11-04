@@ -637,7 +637,7 @@ let lastUpdateTime = 0;
 const UPDATE_THROTTLE_MS = 50; // Reduced from 100ms to 50ms for more responsive updates (20 updates/sec)
 let isMoving = false;
 let movementSettleTimeout = null;
-const MOVEMENT_SETTLE_DELAY = 500; // Time to wait before considering "settled" (reduced from 400ms)
+const MOVEMENT_SETTLE_DELAY = 1000; // Time to wait before considering "settled" (reduced from 400ms)
 let lastNoseXForMovement = null;
 
 // Interpolation state for smooth transitions
