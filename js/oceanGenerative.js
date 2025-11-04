@@ -22,14 +22,12 @@ window.rippleWaveFrequency = 0.25; // How wavy the rings are (try 0.05 to 0.3)
 window.rippleExpansionSpeed = 8; // How fast ripples expand (try 3 to 15)
 window.rippleStrengthFalloff = 0.08; // How quickly rings fade with distance (try 0.03 to 0.15)
 
-// Ripple effect variables - separate tracking for each person
+// Ripple effect variables
 let ripples = [];
 // Expose function to remove ripples for a specific person
 window.removePersonRipples = function (personId) {
   ripples = ripples.filter(r => r.personId !== personId);
 };
-let lastNoseX = null;
-let lastNoseY = null;
 let lastTimelinePosition = null;
 // Expose reference to window for random date selection (updated dynamically)
 Object.defineProperty(window, 'lastTimelinePosition', {
@@ -295,7 +293,7 @@ window.createRippleAtCurrentPosition = function (personId = 1) {
 function createRippleAtCurrentPositionInternal(personId = 1) {
   // Create ripple at the x-axis position
   const xAxisY = getXAxisPosition();
-  const currentTimelinePosition = window.noseX;
+  const currentTimelinePosition = window.markerX;
 
   if (currentTimelinePosition === null) return; // No position data
 
@@ -446,15 +444,15 @@ function checkForTimelineChanges() {
   if (isRandomDateMode) {
     // In random date mode, don't interfere with the pulsing that was already started
     // Just update lastTimelinePosition to avoid triggering change detection
-    if (typeof window !== 'undefined' && window.noseX !== undefined && window.noseX !== null) {
-      lastTimelinePosition = window.noseX;
+    if (typeof window !== 'undefined' && window.markerX !== undefined && window.markerX !== null) {
+      lastTimelinePosition = window.markerX;
     }
     return;
   }
 
-  // Check timeline position changes (only for real person tracking)
-  if (typeof window !== 'undefined' && window.noseX !== undefined && window.noseX !== null) {
-    const currentTimelinePosition = window.noseX;
+  // Check timeline position changes (only for real marker tracking)
+  if (typeof window !== 'undefined' && window.markerX !== undefined && window.markerX !== null) {
+    const currentTimelinePosition = window.markerX;
 
     // Track recent positions for movement-based settling
     recentPositions.push(currentTimelinePosition);
@@ -489,47 +487,6 @@ function checkForTimelineChanges() {
   }
 }
 
-function checkForNoseMovement() {
-  // Check nose movement
-  if (typeof window !== 'undefined' && window.noseX !== undefined && window.noseX !== null && window.noseY !== null) {
-    // If nose position changed significantly, create a new ripple
-    if (lastNoseX === null ||
-      Math.abs(window.noseX - lastNoseX) > 5 ||
-      Math.abs(window.noseY - lastNoseY) > 5) {
-
-      // Clear old ripples if position changed dramatically
-      const distance = lastNoseX !== null ?
-        Math.sqrt((window.noseX - lastNoseX) ** 2 + (window.noseY - lastNoseY) ** 2) : 0;
-
-      if (distance > 20) {
-        // Clear most existing ripples for dramatic position changes
-        ripples = ripples.filter(ripple => ripple.strength > 0.5);
-        // console.log("Cleared weak ripples due to large position change");
-      }
-
-      // Map nose position from video coordinates to canvas coordinates
-      const videoWidth = (typeof window !== 'undefined' && window.videoWidth) ? window.videoWidth : 200;
-      const rippleX = (window.noseX / videoWidth) * oceanCanvas.width;
-      const rippleY = (window.noseY / videoHeight) * oceanCanvas.height;
-
-      ripples.push(new Ripple(rippleX, rippleY, 0, 1, 1));
-      lastNoseX = window.noseX;
-      lastNoseY = window.noseY;
-
-      // console.log("Nose ripple created at:", rippleX, rippleY);
-    }
-  }
-
-  // If no nose detected, gradually clear all ripples
-  if (typeof window === 'undefined' || window.noseX === undefined || window.noseX === null) {
-    if (ripples.length > 0) {
-      ripples.forEach(ripple => {
-        ripple.life -= 0.05; // Faster fade when no nose detected
-      });
-    }
-  }
-}
-
 function animate(currentTime) {
   // Frame rate limiting for better performance
   if (currentTime - lastFrameTime < frameInterval) {
@@ -545,8 +502,7 @@ function animate(currentTime) {
   // Check for timeline changes and create ripples
   checkForTimelineChanges();
 
-  // Disable nose movement ripples to avoid double ripples
-  // checkForNoseMovement();
+  // Nose movement ripples are disabled - marker position is used instead
 
   // Update ripples and sync with global reference
   ripples = ripples.filter(ripple => {

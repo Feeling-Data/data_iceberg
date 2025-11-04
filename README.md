@@ -1,12 +1,12 @@
 # Data Iceberg - Interactive Timeline Visualization
 
-An interactive data visualization that uses body tracking to navigate through a timeline of events. The visualization displays bars for different data categories and creates ripples in an ocean-like generative background.
+An interactive data visualization that uses ArUco marker tracking to navigate through a timeline of events. The visualization displays bars for different data categories and creates ripples in an ocean-like generative background.
 
 ## Architecture
 
 The project consists of three main components:
 
-1. **Python Body Tracking** (`python/`) - Tracks people using a camera and sends OSC messages
+1. **Python Marker Tracking** (`python/`) - Tracks ArUco markers using a camera and sends OSC messages
 2. **Node.js Bridge Server** (`server.js`) - Receives OSC messages and forwards them via WebSocket
 3. **Frontend Visualization** (`index.html`, `js/`) - Receives tracking data and renders the timeline
 
@@ -53,24 +53,27 @@ npm start
 npm run start:server
 ```
 
-**Terminal 2 - Start Python tracking:**
+**Terminal 2 - Start Python marker tracking:**
 ```bash
 npm run start:python
 # or manually:
-cd python && python bodytrack.py
+cd python && python markertrack.py
 ```
 
 The browser should automatically open to `http://localhost:3000`. If not, navigate there manually.
+
+**Note:** You'll need an ArUco marker (DICT_ARUCO_ORIGINAL) to control the visualization. Generate one at https://chev.me/arucogen/
 
 ## Project Structure
 
 ```
 data_iceberg/
-├── python/              # Python body tracking scripts
-│   ├── bodytrack.py    # Main tracking script (add your files here)
+├── python/              # Python marker tracking scripts
+│   ├── markertrack.py  # ArUco marker tracking script
+│   ├── bodytrack.py    # Legacy person tracking (not used)
 │   └── requirements.txt # Python dependencies
 ├── js/                  # Frontend JavaScript
-│   ├── poseDetection.js # WebSocket client & tracking logic
+│   ├── markerDetection.js # WebSocket client & marker tracking logic
 │   ├── timeline.js      # D3.js timeline visualization
 │   └── oceanGenerative.js # Generative ocean background
 ├── server.js           # Node.js OSC-to-WebSocket bridge
@@ -81,12 +84,13 @@ data_iceberg/
 
 ## How It Works
 
-1. **Python Script** (`python/bodytrack.py`):
+1. **Python Script** (`python/markertrack.py`):
    - Captures video from camera
-   - Detects and tracks people
+   - Detects ArUco markers (DICT_ARUCO_ORIGINAL)
+   - Calculates marker center position
    - Sends OSC messages to `localhost:6448` with format:
-     - Address: `/person/{id}`
-     - Arguments: `[center_x, y2, confidence, width, height]`
+     - Address: `/marker/x`
+     - Arguments: `[normalized_x]` (0-1 range)
 
 2. **Bridge Server** (`server.js`):
    - Listens for UDP OSC messages on port `6448`
@@ -96,19 +100,19 @@ data_iceberg/
 
 3. **Frontend** (`index.html` + `js/`):
    - Connects to WebSocket server
-   - Receives person tracking data
-   - Maps person position to timeline dates
+   - Receives marker position data
+   - Maps marker position to timeline dates
    - Renders bars for data categories
    - Creates ripples in generative ocean background
 
 ## Features
 
-- **Single Person Tracking**: Tracks the closest person (by bounding box area)
-- **Random Date Selection**: When no person is detected, randomly selects dates every 10 seconds
-- **Interactive Timeline**: Navigate through timeline by moving left/right
+- **Single Marker Tracking**: Tracks one ArUco marker for timeline navigation
+- **Random Date Selection**: When no marker is detected, randomly selects dates every 10 seconds
+- **Interactive Timeline**: Navigate through timeline by moving marker left/right
 - **Category Visualization**: Bars show different data categories with colors
 - **Generative Ocean**: Ripple effects that respond to date selection
-- **Performance Optimized**: No console logging in production code
+- **Performance Optimized**: Simplified tracking for better performance
 
 ## Configuration
 
@@ -119,10 +123,33 @@ data_iceberg/
 
 ## Troubleshooting
 
-- **No bars/ripples appearing**: Check that Python script is running and sending OSC messages
+- **"Not Found" error in browser**: Another server (like PHP/MAMP) might be using port 3000. Kill it with:
+  ```bash
+  lsof -i :3000  # Find the process ID
+  kill <PID>     # Kill the process
+  ```
+  Then restart the Node.js server.
+- **No bars/ripples appearing**: Check that Python marker tracking script is running and sending OSC messages
+- **Marker not detected**: 
+  - Ensure you're using an ArUco marker from DICT_ARUCO_ORIGINAL dictionary
+  - Check camera has good lighting and marker is clearly visible
+  - Generate marker at: https://chev.me/arucogen/
 - **WebSocket connection failed**: Ensure Node.js server is running (`npm start`)
 - **Port already in use**: Change ports in `server.js` or kill existing processes
 - **Python dependencies missing**: Run `pip install -r python/requirements.txt`
+
+## ArUco Marker Setup
+
+The system requires an **ArUco marker from the DICT_ARUCO_ORIGINAL dictionary**.
+
+**To generate a marker:**
+1. Visit: https://chev.me/arucogen/
+2. Select "Original ArUco" as the dictionary
+3. Choose any marker ID (0, 1, 2, etc.)
+4. Print the marker or display it on a screen
+5. Hold the marker in front of the camera to control the timeline
+
+**Alternative dictionaries** can be configured by editing `MARKER_DICT` in `markertrack.py`.
 
 ## Development
 
