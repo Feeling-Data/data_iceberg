@@ -365,7 +365,7 @@ function goFullScreen() {
 }
 
 
-function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.0, personId = 1, customRectHeight = null) {
+function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.0, personId = 1, customRectHeight = null, simplified = false) {
   const typeGroups = new Map();
 
   // Don't update currentDataCount here - it should be based on specific date position
@@ -397,6 +397,9 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
         const category = d.type1_cluster || "undefined";
         const fillColor = useSnowPattern ? "url(#snownoise-pattern)" : getCategoryColor(category);
 
+        // Create unique data key for smart diffing
+        const dataKey = `${+d.monthObj}-${category}-${i}`;
+
         // Draw rect with specified opacity and person-specific class
         const rect = g.append("rect")
           .attr("x", x)
@@ -404,15 +407,18 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
           .attr("width", 20)
           .attr("height", customRectHeight !== null ? customRectHeight : rectHeight)
           .attr("fill", fillColor)
-          .attr("opacity", opacity)
-          .attr("class", `type-rect type-${type.replace(/\s+/g, '-')} person-${personId}`);
+          .attr("opacity", simplified ? opacity * 0.7 : opacity) // Slightly dimmer during movement
+          .attr("class", `type-rect type-${type.replace(/\s+/g, '-')} person-${personId}`)
+          .attr("data-key", dataKey);
 
         // Store rect reference before adding title
         typeRects.push(rect);
 
-        // Add title tooltip
-        rect.append("title")
-          .text(`${d.title} (${d.date})`);
+        // Add title tooltip (skip in simplified mode for performance)
+        if (!simplified) {
+          rect.append("title")
+            .text(`${d.title} (${d.date})`);
+        }
 
         typePositions.push({ x, y });
       });
@@ -436,46 +442,64 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
       //   boxColor = brightenColor(boxColor, 25);
       // }
 
-      // Draw animated bounding box with person-specific class
-      const box = g.append("rect")
-        .attr("x", minX)
-        .attr("y", minY)
-        .attr("width", maxX - minX)
-        .attr("height", maxY - minY)
-        .attr("stroke", boxColor)
-        .attr("stroke-width", 1.2)
-        .attr("fill", "none")
-        .attr("class", `type-bound person-${personId}`);
+      // Skip animations in simplified mode (during movement)
+      if (simplified) {
+        // Draw simple static box without animation
+        const box = g.append("rect")
+          .attr("x", minX)
+          .attr("y", minY)
+          .attr("width", maxX - minX)
+          .attr("height", maxY - minY)
+          .attr("stroke", boxColor)
+          .attr("stroke-width", 1.2)
+          .attr("fill", "none")
+          .attr("opacity", 0.5) // Dimmer during movement
+          .attr("class", `type-bound person-${personId}`);
+      } else {
+        // Draw animated bounding box with person-specific class
+        const box = g.append("rect")
+          .attr("x", minX)
+          .attr("y", minY)
+          .attr("width", maxX - minX)
+          .attr("height", maxY - minY)
+          .attr("stroke", boxColor)
+          .attr("stroke-width", 1.2)
+          .attr("fill", "none")
+          .attr("class", `type-bound person-${personId}`);
 
-      const length = 2 * ((maxX - minX) + (maxY - minY));
-      const DRAW_DURATION = 1000;
+        const length = 2 * ((maxX - minX) + (maxY - minY));
+        const DRAW_DURATION = 1000;
 
-      const anim = box
-        .attr("stroke-dasharray", length)
-        .attr("stroke-dashoffset", length)
-        .transition()
-        .duration(DRAW_DURATION)
-        .ease(d3.easeLinear)
-        .attr("stroke-dashoffset", 0);
-
-      // Push to animation array
-      activeAnimations.push(anim);
-
-      // Fade rectangles to lower opacity as outline draws
-      typeRects.forEach(rectSelection => {
-        const rectAnim = rectSelection
+        const anim = box
+          .attr("stroke-dasharray", length)
+          .attr("stroke-dashoffset", length)
           .transition()
           .duration(DRAW_DURATION)
-          .attr("opacity", opacity === .4 ? .25 : 1);
+          .ease(d3.easeLinear)
+          .attr("stroke-dashoffset", 0);
+
         // Push to animation array
-        activeAnimations.push(rectAnim);
-      });
+        activeAnimations.push(anim);
+
+        // Fade rectangles to lower opacity as outline draws with staggered timing
+        typeRects.forEach((rectSelection, index) => {
+          const staggerDelay = index * 15; // 15ms stagger between bars for cascading effect
+          const rectAnim = rectSelection
+            .transition()
+            .delay(staggerDelay)
+            .duration(DRAW_DURATION)
+            .attr("opacity", opacity === .4 ? .25 : 1);
+          // Push to animation array
+          activeAnimations.push(rectAnim);
+        });
+      }
 
       //collect label info - only for categories with enough records
+      // Skip labels in simplified mode for better performance
       const recordCount = typePositions.length;
       const minRecordsForLabel = 12; // Minimum records to show label
 
-      if (recordCount >= minRecordsForLabel) {
+      if (!simplified && recordCount >= minRecordsForLabel) {
         typeBoxInfoList.push({
           type,
           anchorX: maxX, // Use maxX (end) for right alignment
@@ -608,9 +632,22 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
     });
 }
 
-// Throttle updates to prevent excessive updates
+// Enhanced update throttling and movement detection
 let lastUpdateTime = 0;
-const UPDATE_THROTTLE_MS = 50; // Minimum time between updates
+const UPDATE_THROTTLE_MS = 100; // Increased from 50ms to 100ms for smoother feel (10 updates/sec)
+let isMoving = false;
+let movementSettleTimeout = null;
+const MOVEMENT_SETTLE_DELAY = 400; // Time to wait before considering "settled"
+let lastNoseXForMovement = null;
+
+// Interpolation state for smooth transitions
+let interpolationState = {
+  active: false,
+  startX: null,
+  targetX: null,
+  startTime: null,
+  duration: 200 // Smooth transition duration in ms
+};
 
 function updateVisibleData(noseX, personId = 1) {
   // Throttle to prevent excessive updates
@@ -622,16 +659,60 @@ function updateVisibleData(noseX, personId = 1) {
   }
 
   lastUpdateTime = now;
+  
+  // Detect movement for intelligent rendering
+  if (noseX !== null && noseX !== undefined) {
+    const movementThreshold = 1.0; // Minimum movement to consider as "moving"
+    const hasMovement = lastNoseXForMovement === null || 
+                       Math.abs(noseX - lastNoseXForMovement) > movementThreshold;
+    
+    if (hasMovement) {
+      if (!isMoving) {
+        isMoving = true;
+      }
+      lastNoseXForMovement = noseX;
+      
+      // Reset settle timeout
+      if (movementSettleTimeout) {
+        clearTimeout(movementSettleTimeout);
+      }
+      
+      // Set timeout to detect when movement stops
+      movementSettleTimeout = setTimeout(() => {
+        isMoving = false;
+        // Trigger full redraw with animations when settled
+        updateVisibleDataInternal(noseX, personId, false);
+      }, MOVEMENT_SETTLE_DELAY);
+    }
+  }
 
+  // Call internal function with movement awareness
+  updateVisibleDataInternal(noseX, personId, isMoving);
+}
+
+// Internal function that does the actual rendering
+function updateVisibleDataInternal(noseX, personId = 1, simplified = false) {
   if (!xScale || !g || !startDate || !endDate) {
     return;
   }
 
-  // Clear animations and elements
-  clearPersonAnimations(personId);
+  // Clear animations only when doing full render
+  if (!simplified) {
+    clearPersonAnimations(personId);
+  }
 
-  // Remove bars
-  g.selectAll(".person-1").remove();
+  // Smart redraw: store previous state to detect changes
+  const previousBars = new Set();
+  g.selectAll(`.person-${personId}`).each(function() {
+    const el = d3.select(this);
+    const dataKey = el.attr('data-key');
+    if (dataKey) {
+      previousBars.add(dataKey);
+    }
+  });
+
+  // Remove old bars (smart removal - only what's not needed)
+  g.selectAll(`.person-${personId}`).remove();
 
   // Calculate time window based on the specific person's position
   let from = startDate, to = endDate;
@@ -792,6 +873,8 @@ function updateVisibleData(noseX, personId = 1) {
   }
 
   // Draw bars for this specific person with person-specific classes
+  // Use simplified rendering during movement for better performance
+  const useSimplified = simplified && isMoving;
 
   drawClusterRects(
     visibleWith,
@@ -799,7 +882,8 @@ function updateVisibleData(noseX, personId = 1) {
     false,  // Use category colors
     1.0,    // Full opacity for top bar
     personId,
-    scaledRectHeightAbove  // Pass scaled height
+    scaledRectHeightAbove,  // Pass scaled height
+    useSimplified  // Simplified mode flag
   );
 
   drawClusterRects(
@@ -808,7 +892,8 @@ function updateVisibleData(noseX, personId = 1) {
     false,  // Use category colors like upper bar
     .4,     // Semi-transparent for bottom bar
     personId,
-    scaledRectHeightBelow  // Pass scaled height
+    scaledRectHeightBelow,  // Pass scaled height
+    useSimplified  // Simplified mode flag
   );
 
   // At the end of updates, if grid is visible, refresh mirrors

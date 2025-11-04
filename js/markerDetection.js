@@ -13,10 +13,14 @@ function getVideoWidth() {
   return (typeof window !== 'undefined' && window.videoWidth) ? window.videoWidth : 200;
 }
 
-// Simple smoothing
-const SMOOTHING_WINDOW = 5;
-let markerXHistory = [];
-const MARKER_MOVE_THRESHOLD = 0.5; // Minimum movement to update (in videoWidth units)
+// Enhanced exponential moving average smoothing for more responsive feel
+const EMA_ALPHA = 0.3; // Smoothing factor (0-1): lower = smoother, higher = more responsive
+let smoothedMarkerX = null;
+const MARKER_MOVE_THRESHOLD = 0.3; // Reduced threshold for more responsive updates (in videoWidth units)
+
+// Velocity tracking for intelligent throttling
+let lastMarkerX = null;
+let lastMarkerUpdateTimeInternal = 0;
 
 // Random date selection when no marker is detected
 let randomDateInterval = null;
@@ -117,21 +121,37 @@ function processMarkerPosition(normalizedX) {
   const vWidth = getVideoWidth();
   const markerXInVideoSpace = normalizedX * vWidth;
   
-  // Add to smoothing history
-  markerXHistory.push(markerXInVideoSpace);
-  if (markerXHistory.length > SMOOTHING_WINDOW) {
-    markerXHistory.shift();
+  // Apply exponential moving average for smooth, responsive tracking
+  if (smoothedMarkerX === null) {
+    smoothedMarkerX = markerXInVideoSpace; // Initialize on first value
+  } else {
+    smoothedMarkerX = EMA_ALPHA * markerXInVideoSpace + (1 - EMA_ALPHA) * smoothedMarkerX;
   }
   
-  // Calculate smoothed value
-  const smoothedX = markerXHistory.reduce((a, b) => a + b, 0) / markerXHistory.length;
+  // Calculate velocity for intelligent throttling
+  const velocity = lastMarkerX !== null ? Math.abs(smoothedMarkerX - lastMarkerX) : 0;
+  const timeSinceLastUpdate = now - lastMarkerUpdateTimeInternal;
   
-  // Check if movement is significant
+  // Velocity-based throttling: fast movement = less frequent updates (smoother)
+  // Slow movement = more frequent updates (responsive)
+  let throttleMs = 50; // Base throttle
+  if (velocity > 5) {
+    throttleMs = 150; // Fast movement: update less often
+  } else if (velocity > 2) {
+    throttleMs = 100; // Medium movement
+  } else {
+    throttleMs = 50; // Slow/fine movement: update more often
+  }
+  
+  // Check if enough time has passed based on velocity
   const shouldUpdate = window.markerX === null || 
-                       Math.abs(smoothedX - window.markerX) > MARKER_MOVE_THRESHOLD;
+                       (Math.abs(smoothedMarkerX - window.markerX) > MARKER_MOVE_THRESHOLD &&
+                        timeSinceLastUpdate >= throttleMs);
   
   if (shouldUpdate) {
-    window.markerX = smoothedX;
+    lastMarkerX = window.markerX;
+    window.markerX = smoothedMarkerX;
+    lastMarkerUpdateTimeInternal = now;
     
     // Stop pulsing when switching from random mode to marker tracking
     if (wasInRandomMode && typeof window.stopPulsing === 'function') {
@@ -152,7 +172,8 @@ function checkMarkerTimeout() {
     if (now - lastMarkerUpdateTime > MARKER_TIMEOUT_MS) {
       // Marker lost
       window.markerX = null;
-      markerXHistory = [];
+      smoothedMarkerX = null;
+      lastMarkerX = null;
       
       // Clear visualization
       if (typeof window.removePersonRipples === 'function') {
