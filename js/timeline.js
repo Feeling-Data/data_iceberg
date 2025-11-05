@@ -497,7 +497,7 @@ function drawClusterRects(dataArray, yFunc, useSnowPattern = false, opacity = 1.
       //collect label info - only for categories with enough records
       // Skip labels in simplified mode for better performance
       const recordCount = typePositions.length;
-      const minRecordsForLabel = 12; // Minimum records to show label
+      const minRecordsForLabel = 16; // Minimum records to show label
 
       if (!simplified && recordCount >= minRecordsForLabel) {
         typeBoxInfoList.push({
