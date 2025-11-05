@@ -662,32 +662,32 @@ function updateVisibleData(noseX, personId = 1) {
   }
 
   lastUpdateTime = now;
-  
+
   // Quick check: if position hasn't changed enough, skip expensive recalculation
-  if (lastCalculatedWindow.noseX !== null && 
-      noseX !== null &&
-      Math.abs(noseX - lastCalculatedWindow.noseX) < 1.0) {
+  if (lastCalculatedWindow.noseX !== null &&
+    noseX !== null &&
+    Math.abs(noseX - lastCalculatedWindow.noseX) < 1.0) {
     // Position change is too small to change the visible window, skip update
     return;
   }
-  
+
   // Detect movement for intelligent rendering
   if (noseX !== null && noseX !== undefined) {
     const movementThreshold = 1.0; // Minimum movement to consider as "moving"
-    const hasMovement = lastNoseXForMovement === null || 
-                       Math.abs(noseX - lastNoseXForMovement) > movementThreshold;
-    
+    const hasMovement = lastNoseXForMovement === null ||
+      Math.abs(noseX - lastNoseXForMovement) > movementThreshold;
+
     if (hasMovement) {
       if (!isMoving) {
         isMoving = true;
       }
       lastNoseXForMovement = noseX;
-      
+
       // Reset settle timeout
       if (movementSettleTimeout) {
         clearTimeout(movementSettleTimeout);
       }
-      
+
       // Set timeout to detect when movement stops
       movementSettleTimeout = setTimeout(() => {
         isMoving = false;
@@ -740,7 +740,7 @@ function updateVisibleDataInternal(noseX, personId = 1, simplified = false) {
       to = endDate;
       from = d3.timeMonth.offset(to, -windowMonths);
     }
-    
+
     // Cache the calculated window
     lastCalculatedWindow = { from, to, noseX, centerTimeRaw };
   }
@@ -750,38 +750,38 @@ function updateVisibleDataInternal(noseX, personId = 1, simplified = false) {
     // Remove all bars during movement - show only enhanced date labels
     g.selectAll(`.person-${personId}`).remove();
     g.selectAll(`.preview-bar-${personId}`).remove();
-    
+
     // Enhanced axis label highlighting during movement - make it VERY visible
     g.selectAll(".x-axis .tick text")
-      .each(function(d) {
+      .each(function (d) {
         const isHighlighted = (d >= from && d <= to);
         d3.select(this)
           .style("fill", isHighlighted ? "#FFF" : "rgba(255,255,255,0.5)")
           .style("font-weight", isHighlighted ? "900" : "400")
-          .style("font-size", isHighlighted ? "24px" : "16px") // Explicitly set both states
-          .style("text-shadow", isHighlighted ? "0 0 10px rgba(255,255,255,0.8)" : "none");
+          .style("font-size", "16px"); // Explicitly set both states
+        // .style("text-shadow", isHighlighted ? "0 0 10px rgba(255,255,255,0.8)" : "none");
       });
-    
+
     // Update data count for ripples but DON'T render any bars during movement
     const shouldShowBars = noseX !== null && noseX !== undefined && !isNaN(noseX);
-    
+
     if (shouldShowBars) {
       // Remove any preview bars from previous movements
       g.selectAll(`.preview-bar-${personId}`).remove();
-      
+
       // Update data count for ripples
       if (centerTimeRaw) {
         const visibleWithout = withoutLocation
           .filter(d => d.monthObj >= from && d.monthObj <= to);
-        
+
         const centerMonth = new Date(centerTimeRaw.getFullYear(), centerTimeRaw.getMonth(), 1);
         const dataAtCenter = visibleWithout.filter(d => d.monthObj.getTime() === centerMonth.getTime());
         const totalCountAtCenter = d3.sum(dataAtCenter, d => d.count || 0);
-        
+
         window.currentDataCount1 = totalCountAtCenter;
       }
     }
-    
+
     return; // Skip full render during movement
   }
 
@@ -794,7 +794,7 @@ function updateVisibleDataInternal(noseX, personId = 1, simplified = false) {
 
   // Smart redraw: store previous state to detect changes
   const previousBars = new Set();
-  g.selectAll(`.person-${personId}`).each(function() {
+  g.selectAll(`.person-${personId}`).each(function () {
     const el = d3.select(this);
     const dataKey = el.attr('data-key');
     if (dataKey) {
@@ -833,8 +833,8 @@ function updateVisibleDataInternal(noseX, personId = 1, simplified = false) {
     })
     .style("fill", "#FFF")
     .style("font-weight", "900")
-    .style("font-size", "24px")
-    .style("text-shadow", "0 0 10px rgba(255,255,255,0.8)");
+    .style("font-size", "16px");
+  // .style("text-shadow", "0 0 10px rgba(255,255,255,0.8)");
 
 
   // Filter data based on this person's specific time window
