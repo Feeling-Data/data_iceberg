@@ -236,46 +236,143 @@ def run_calibration_wizard(cap, width, height, detector):
     
     return calibration_points
 
-# *** Load the video capture ***
+# *** Camera initialization with retry logic ***
+def initialize_camera(capture_source=0, max_retries=3, retry_delay=2.0):
+    """
+    Initialize camera with robust error handling and retry logic.
+    
+    Args:
+        capture_source: Camera index (0 for default)
+        max_retries: Number of initialization attempts
+        retry_delay: Delay between retries in seconds
+    
+    Returns:
+        tuple: (cap, width, height, fps) or (None, None, None, None) on failure
+    """
+    for attempt in range(max_retries):
+        print(f"\n{'='*60}")
+        print(f"Camera initialization attempt {attempt + 1}/{max_retries}")
+        print(f"{'='*60}")
+        
+        try:
+            # Release any existing capture
+            cap = cv2.VideoCapture(capture_source)
+            
+            if not cap.isOpened():
+                print("❌ Failed to open camera device")
+                if attempt < max_retries - 1:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    return None, None, None, None
+            
+            # Set backend and buffering to improve reliability
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffer to get latest frames
+            cap.set(cv2.CAP_PROP_FPS, 30)  # Request 30fps
+            
+            # Try to set a reasonable resolution
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+            
+            # Give camera time to initialize
+            print("⏳ Initializing camera hardware...")
+            time.sleep(2.0)  # Increased from 1.0 to 2.0 seconds
+            
+            # Flush initial frames (sometimes first frames are black)
+            print("⏳ Flushing initial frames...")
+            for i in range(10):  # Increased from 5 to 10 frames
+                success = cap.grab()  # Use grab() instead of read() - faster
+                if not success:
+                    print(f"⚠️  Failed to grab frame {i+1}/10")
+            
+            # Get the actual resolution
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            
+            # Verify camera is actually working by reading a real frame
+            print("⏳ Testing frame capture...")
+            test_success = False
+            test_frame = None
+            
+            for test_attempt in range(5):
+                success, test_frame = cap.read()
+                if success and test_frame is not None and test_frame.size > 0:
+                    # Check if frame is not all black (common issue)
+                    if test_frame.mean() > 1.0:  # Average pixel value should be > 1
+                        test_success = True
+                        break
+                    else:
+                        print(f"⚠️  Frame {test_attempt + 1}/5 is black (mean: {test_frame.mean():.2f})")
+                else:
+                    print(f"⚠️  Failed to read test frame {test_attempt + 1}/5")
+                time.sleep(0.2)  # Small delay between test reads
+            
+            if not test_success:
+                print("❌ Camera not responding with valid frames")
+                cap.release()
+                if attempt < max_retries - 1:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    return None, None, None, None
+            
+            # Success!
+            print(f"✅ Camera initialized successfully!")
+            print(f"   Resolution: {width}x{height}")
+            print(f"   FPS: {fps}")
+            print(f"   Test frame mean brightness: {test_frame.mean():.2f}")
+            return cap, width, height, fps
+            
+        except Exception as e:
+            print(f"❌ Exception during camera initialization: {e}")
+            if 'cap' in locals():
+                cap.release()
+            if attempt < max_retries - 1:
+                print(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                return None, None, None, None
+    
+    return None, None, None, None
+
+
+def reinitialize_camera(cap, capture_source=0):
+    """
+    Reinitialize camera when it appears to be frozen.
+    
+    Args:
+        cap: Existing capture object to release
+        capture_source: Camera index
+    
+    Returns:
+        tuple: (cap, width, height, fps) or (None, None, None, None) on failure
+    """
+    print("\n⚠️  Camera appears frozen - attempting reinitialization...")
+    if cap is not None:
+        cap.release()
+    time.sleep(1.0)
+    return initialize_camera(capture_source, max_retries=2, retry_delay=1.5)
+
+
+# Initialize camera with retry logic
 capture_source = 0  # Use the default camera
-cap = cv2.VideoCapture(capture_source)
+cap, width, height, fps = initialize_camera(capture_source)
 
-# GoPro camera configuration fixes
-# Set backend and buffering to improve reliability
-cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffer to get latest frames
-cap.set(cv2.CAP_PROP_FPS, 30)  # Request 30fps
-
-# Try to set a reasonable resolution if camera supports it
-# This helps with some cameras that don't initialize properly
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-
-# Give camera time to initialize
-print("Initializing camera...")
-time.sleep(1)
-
-# Flush initial frames (sometimes first frames are black)
-for _ in range(5):
-    cap.read()
-
-# Get the actual resolution of the video capture
-width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-fps = cap.get(cv2.CAP_PROP_FPS)
-print(f"Resolution: {width}x{height} @ {fps}fps")
-
-# Verify camera is actually working
-success, test_frame = cap.read()
-if not success or test_frame is None:
-    print("ERROR: Could not read from camera!")
+if cap is None:
+    print("\n" + "="*60)
+    print("❌ CAMERA INITIALIZATION FAILED")
+    print("="*60)
     print("Please check:")
-    print("  1. Camera is connected")
-    print("  2. Camera permissions are granted")
-    print("  3. No other app is using the camera")
-    cap.release()
+    print("  1. Camera is connected properly")
+    print("  2. Camera permissions are granted to Python/Terminal")
+    print("  3. No other application is using the camera")
+    print("  4. Camera drivers are up to date")
+    print("  5. Try unplugging and reconnecting the camera")
+    print("="*60)
     exit(1)
-else:
-    print("Camera initialized successfully!")
 
 # Set up the OSC client
 osc_client = udp_client.SimpleUDPClient("127.0.0.1", 6448)  # Sending to localhost on port 6448
@@ -322,21 +419,97 @@ MARKER_LOST_TIMEOUT = 1.0  # Seconds to wait before considering marker truly los
 last_valid_marker_time = 0  # Last time we saw our target marker
 last_valid_position = None  # Last known valid position
 
+# Camera health monitoring
+last_successful_frame_time = time.time()
+consecutive_frame_failures = 0
+MAX_CONSECUTIVE_FAILURES = 30  # Allow 30 consecutive failures before reinit
+CAMERA_TIMEOUT = 5.0  # If no successful frame for 5 seconds, reinitialize
+last_frame_mean = 0.0  # Track frame brightness to detect frozen frames
+frozen_frame_count = 0
+MAX_FROZEN_FRAMES = 60  # If same frame for 2 seconds @ 30fps, reinitialize
+
 # Loop through the video frames
 while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
     # Read a frame from the video
     success, frame = cap.read()
     frame_count += 1
 
-    if success:
-        # Convert to grayscale for ArUco detection
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # Camera health check
+    if not success or frame is None or frame.size == 0:
+        consecutive_frame_failures += 1
+        print(f"⚠️  Frame read failed ({consecutive_frame_failures}/{MAX_CONSECUTIVE_FAILURES})")
         
-        # Detect ArUco markers (OpenCV 4.7+ API)
-        corners, ids, rejected = detector.detectMarkers(gray)
+        # Check if we should attempt recovery
+        time_since_success = time.time() - last_successful_frame_time
         
-        # Create annotated frame (make a copy so it's writable)
-        annotated_frame = frame.copy()
+        if consecutive_frame_failures >= MAX_CONSECUTIVE_FAILURES or time_since_success >= CAMERA_TIMEOUT:
+            print(f"❌ Camera health check failed:")
+            print(f"   Consecutive failures: {consecutive_frame_failures}")
+            print(f"   Time since last success: {time_since_success:.1f}s")
+            
+            # Attempt to reinitialize camera
+            cap, width, height, fps = reinitialize_camera(cap, capture_source)
+            
+            if cap is None:
+                print("❌ Failed to recover camera - exiting")
+                break
+            
+            # Reset health counters
+            consecutive_frame_failures = 0
+            last_successful_frame_time = time.time()
+            frozen_frame_count = 0
+            last_frame_mean = 0.0
+            print("✅ Camera reinitialized successfully - resuming tracking")
+            continue
+        else:
+            # Wait a bit and try again
+            time.sleep(0.1)
+            continue
+    
+    # Frame read succeeded - check if frame is frozen
+    current_frame_mean = frame.mean()
+    
+    # Detect frozen frames (same content repeatedly)
+    if abs(current_frame_mean - last_frame_mean) < 0.1 and last_frame_mean > 0:
+        frozen_frame_count += 1
+        if frozen_frame_count >= MAX_FROZEN_FRAMES:
+            print(f"⚠️  Camera appears frozen (same frame for {frozen_frame_count} iterations)")
+            print(f"   Frame mean: {current_frame_mean:.2f} (previous: {last_frame_mean:.2f})")
+            
+            # Attempt to reinitialize
+            cap, width, height, fps = reinitialize_camera(cap, capture_source)
+            
+            if cap is None:
+                print("❌ Failed to recover camera - exiting")
+                break
+            
+            # Reset health counters
+            consecutive_frame_failures = 0
+            last_successful_frame_time = time.time()
+            frozen_frame_count = 0
+            last_frame_mean = 0.0
+            print("✅ Camera reinitialized successfully - resuming tracking")
+            continue
+    else:
+        frozen_frame_count = 0
+    
+    last_frame_mean = current_frame_mean
+    
+    # Reset failure counter on success
+    consecutive_frame_failures = 0
+    last_successful_frame_time = time.time()
+
+    # Wrap frame processing in try-except to handle any unexpected errors
+    try:
+        if success:
+            # Convert to grayscale for ArUco detection
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            
+            # Detect ArUco markers (OpenCV 4.7+ API)
+            corners, ids, rejected = detector.detectMarkers(gray)
+            
+            # Create annotated frame (make a copy so it's writable)
+            annotated_frame = frame.copy()
         
         if ids is not None and len(ids) > 0:
             # Find the target marker (either specific ID or first one detected)
@@ -496,6 +669,21 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
                                    (cX_other - 50, cY_other - 20), 
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (128, 128, 128), 1)
         
+        # Add camera health status indicator
+        health_color = (0, 255, 0)  # Green = healthy
+        health_text = "CAM: OK"
+        
+        if consecutive_frame_failures > 0:
+            health_color = (0, 165, 255)  # Orange = warning
+            health_text = f"CAM: {consecutive_frame_failures} fails"
+        
+        if frozen_frame_count > 10:
+            health_color = (0, 165, 255)  # Orange = warning  
+            health_text = f"CAM: frozen? ({frozen_frame_count})"
+        
+        cv2.putText(annotated_frame, health_text, (width - 200, 30),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, health_color, 2)
+        
         # Convert to PIL Image for annotate_fps
         annotated_frame_pil = Image.fromarray(annotated_frame)
         annotate_fps(annotated_frame_pil)
@@ -516,9 +704,32 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
                 print("Calibration updated! Resuming normal tracking...")
             else:
                 print("Calibration cancelled. Resuming normal tracking...")
-    else:
-        # Break the loop if the end of the video is reached
-        break
+    
+    except Exception as e:
+        # Handle any unexpected errors during frame processing
+        print(f"⚠️  Error processing frame: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Increment failure counter
+        consecutive_frame_failures += 1
+        
+        # If too many errors, try to reinitialize
+        if consecutive_frame_failures >= 10:
+            print("Too many processing errors - attempting camera reinitialization")
+            cap, width, height, fps = reinitialize_camera(cap, capture_source)
+            
+            if cap is None:
+                print("❌ Failed to recover camera - exiting")
+                break
+            
+            consecutive_frame_failures = 0
+            last_successful_frame_time = time.time()
+            frozen_frame_count = 0
+            last_frame_mean = 0.0
+        
+        # Continue to next frame
+        continue
 
 # Release the video capture object and close the display window
 cap.release()
