@@ -426,7 +426,7 @@ MAX_CONSECUTIVE_FAILURES = 30  # Allow 30 consecutive failures before reinit
 CAMERA_TIMEOUT = 5.0  # If no successful frame for 5 seconds, reinitialize
 last_frame_mean = 0.0  # Track frame brightness to detect frozen frames
 frozen_frame_count = 0
-MAX_FROZEN_FRAMES = 60  # If same frame for 2 seconds @ 30fps, reinitialize
+MAX_FROZEN_FRAMES = 300  # If same frame for 10 seconds @ 30fps, reinitialize
 
 # Loop through the video frames
 while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
@@ -677,7 +677,7 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
             health_color = (0, 165, 255)  # Orange = warning
             health_text = f"CAM: {consecutive_frame_failures} fails"
         
-        if frozen_frame_count > 10:
+        if frozen_frame_count > 100:
             health_color = (0, 165, 255)  # Orange = warning  
             health_text = f"CAM: frozen? ({frozen_frame_count})"
         
