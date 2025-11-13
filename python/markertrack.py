@@ -237,7 +237,7 @@ def run_calibration_wizard(cap, width, height, detector):
     return calibration_points
 
 # *** Camera initialization with retry logic ***
-def initialize_camera(capture_source=0, max_retries=3, retry_delay=2.0):
+def initialize_camera(capture_source=0, max_retries=10, retry_delay=2.0):
     """
     Initialize camera with robust error handling and retry logic.
     
@@ -354,7 +354,7 @@ def reinitialize_camera(cap, capture_source=0):
     if cap is not None:
         cap.release()
     time.sleep(1.0)
-    return initialize_camera(capture_source, max_retries=2, retry_delay=1.5)
+    return initialize_camera(capture_source, max_retries=10, retry_delay=1.5)
 
 
 # Initialize camera with retry logic
