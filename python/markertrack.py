@@ -386,6 +386,9 @@ window_name = "ArUco Marker Tracking"
 cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)  # WINDOW_NORMAL allows resizing
 # Set window to a smaller size (50% of camera resolution)
 cv2.resizeWindow(window_name, width // 2, height // 2)
+# Position window on primary monitor (top-left area of main screen)
+# Using coordinates near 0,0 should place it on the primary display
+cv2.moveWindow(window_name, 100, 100)
 
 print("\n" + "="*60)
 print("ArUco Marker Tracking with Perspective Calibration")
@@ -426,9 +429,11 @@ last_successful_frame_time = time.time()
 consecutive_frame_failures = 0
 MAX_CONSECUTIVE_FAILURES = 30  # Allow 30 consecutive failures before reinit
 CAMERA_TIMEOUT = 5.0  # If no successful frame for 5 seconds, reinitialize
-last_frame_mean = 0.0  # Track frame brightness to detect frozen frames
+last_frame_hash = None  # Track frame content hash to detect truly frozen frames
+last_frame_time = time.time()  # Track when we got a new unique frame
 frozen_frame_count = 0
-MAX_FROZEN_FRAMES = 300  # If same frame for 10 seconds @ 30fps, reinitialize
+MAX_FROZEN_FRAMES = 150  # If exact same frame for 5 seconds @ 30fps, reinitialize
+FROZEN_TIMEOUT = 10.0  # If no new frame content for 10 seconds, consider frozen
 
 # Loop through the video frames
 while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
@@ -460,7 +465,8 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
             consecutive_frame_failures = 0
             last_successful_frame_time = time.time()
             frozen_frame_count = 0
-            last_frame_mean = 0.0
+            last_frame_hash = None
+            last_frame_time = time.time()
             print("✅ Camera reinitialized successfully - resuming tracking")
             continue
         else:
@@ -468,15 +474,21 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
             time.sleep(0.1)
             continue
     
-    # Frame read succeeded - check if frame is frozen
-    current_frame_mean = frame.mean()
+    # Frame read succeeded - check if frame is actually frozen (exact same data)
+    # Use a hash of a subsample of the frame for efficiency
+    # Sample every 10th pixel to create a lightweight fingerprint
+    frame_sample = frame[::10, ::10].tobytes()
+    current_frame_hash = hash(frame_sample)
     
-    # Detect frozen frames (same content repeatedly)
-    if abs(current_frame_mean - last_frame_mean) < 0.1 and last_frame_mean > 0:
+    # Check if this is the exact same frame as before
+    if current_frame_hash == last_frame_hash and last_frame_hash is not None:
         frozen_frame_count += 1
-        if frozen_frame_count >= MAX_FROZEN_FRAMES:
-            print(f"⚠️  Camera appears frozen (same frame for {frozen_frame_count} iterations)")
-            print(f"   Frame mean: {current_frame_mean:.2f} (previous: {last_frame_mean:.2f})")
+        time_since_new_frame = time.time() - last_frame_time
+        
+        # Only trigger if we've had the same frame for a significant time
+        if frozen_frame_count >= MAX_FROZEN_FRAMES or time_since_new_frame >= FROZEN_TIMEOUT:
+            print(f"⚠️  Camera appears frozen (exact same frame data)")
+            print(f"   Frozen for {frozen_frame_count} iterations ({time_since_new_frame:.1f}s)")
             
             # Attempt to reinitialize
             cap, width, height, fps = reinitialize_camera(cap, capture_source)
@@ -489,13 +501,16 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
             consecutive_frame_failures = 0
             last_successful_frame_time = time.time()
             frozen_frame_count = 0
-            last_frame_mean = 0.0
+            last_frame_hash = None
+            last_frame_time = time.time()
             print("✅ Camera reinitialized successfully - resuming tracking")
             continue
     else:
+        # New frame content detected
         frozen_frame_count = 0
+        last_frame_time = time.time()
     
-    last_frame_mean = current_frame_mean
+    last_frame_hash = current_frame_hash
     
     # Reset failure counter on success
     consecutive_frame_failures = 0
@@ -728,7 +743,8 @@ while cap.isOpened() and cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE
             consecutive_frame_failures = 0
             last_successful_frame_time = time.time()
             frozen_frame_count = 0
-            last_frame_mean = 0.0
+            last_frame_hash = None
+            last_frame_time = time.time()
         
         # Continue to next frame
         continue
