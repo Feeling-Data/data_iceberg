@@ -383,7 +383,9 @@ parameters = aruco.DetectorParameters()
 detector = aruco.ArucoDetector(dictionary, parameters)
 
 window_name = "ArUco Marker Tracking"
-cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE | cv2.WINDOW_GUI_EXPANDED)
+cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)  # WINDOW_NORMAL allows resizing
+# Set window to a smaller size (50% of camera resolution)
+cv2.resizeWindow(window_name, width // 2, height // 2)
 
 print("\n" + "="*60)
 print("ArUco Marker Tracking with Perspective Calibration")
